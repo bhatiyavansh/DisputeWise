@@ -113,7 +113,7 @@ Evidence relevance is reason-code-aware (e.g. 3DS/AVS/CVV matter for `unauthoriz
 | GET | `/cases` | implemented (pagination, `reason_code`/`status` filters) |
 | GET | `/cases/{case_id}` | implemented (dispute + transaction + customer) |
 | GET | `/cases/{case_id}/evidence` | implemented |
-| POST | `/cases/{case_id}/score` | **501** stub — Phase 2 |
+| POST | `/cases/{case_id}/score` | **implemented (Phase 2)** — calibrated winnability + SHAP factors |
 | POST | `/cases/{case_id}/decision` | **501** stub — Phase 3 |
 | POST | `/cases/{case_id}/draft` | **501** stub — Phase 4 |
 
@@ -123,7 +123,9 @@ Evidence relevance is reason-code-aware (e.g. 3DS/AVS/CVV matter for `unauthoriz
 docker compose run --rm backend pytest -v
 ```
 
-Covers: health check, case listing/filtering/pagination, case detail, evidence retrieval, 404s, and the three not-implemented stubs. Dataset-level checks (row counts, schema, distributions, duplicates, reproducibility, lock integrity) are covered by `scripts/verify_dataset.py`.
+Covers: health check, case listing/filtering/pagination, case detail, evidence retrieval, 404s, the remaining stubs, and (Phase 2) feature determinism, target-leakage guards, split integrity, model/calibration/SHAP behavior, and the `/score` contract. Dataset-level checks (row counts, schema, distributions, duplicates, reproducibility, lock integrity) are covered by `scripts/verify_dataset.py`.
+
+The Phase 2 tests skip cleanly if the dataset has not been generated or the model has not been trained in a given checkout.
 
 ## Data strategy (hybrid)
 
@@ -137,6 +139,68 @@ Three data categories, kept strictly separate and never merged:
 
 Validate the reference layer with `python scripts/verify_reference_data.py` (or `make verify-reference`). See [docs/data_strategy.md](docs/data_strategy.md) for the full rationale and [docs/external_data.md](docs/external_data.md) for what external datasets were investigated and why none were merged in. `data/metadata/data_manifest.json` is the machine-readable index across all three categories.
 
+## Phase 2 — risk engine (LightGBM + calibration + SHAP)
+
+Phase 2 adds the winnability model behind `POST /cases/{id}/score`. It predicts **P(favorable outcome | evidence)** for a dispute and explains the prediction with SHAP. It is decision *support*: it does not recommend contesting (Phase 3) and never submits anything.
+
+| | |
+|---|---|
+| Model | LightGBM binary classifier (94 features, 212 rounds, regularization-leaning) |
+| Explainability | SHAP (`TreeExplainer`, exact TreeSHAP), cross-checked against LightGBM's native `pred_contrib` |
+| Calibration | **Platt scaling (sigmoid)**, selected by cross-fitted out-of-fold Brier on validation |
+| Model version | `risk-v1` / feature schema `features-v1` |
+| Operating threshold | 0.44 (F1-max on validation; never tuned on the locked test set) |
+
+### Canonical commands
+
+```bash
+# Audit the dataset before modeling (fails loudly on leakage / split problems)
+python scripts/audit_model_data.py
+
+# Train the model  -- deterministic: same data + seed 42 -> byte-identical artifacts
+python scripts/train_model.py
+
+# Evaluate on validation, against the evidence-completeness baseline
+python scripts/evaluate_model.py
+
+# Assess probability calibration (Brier / ECE / reliability curve)
+python scripts/evaluate_calibration.py
+
+# OFFICIAL final evaluation on the locked test set (read-only, checksum-guarded)
+python scripts/evaluate_locked_test.py
+
+# Where the model gets it wrong, and for whom
+python scripts/error_analysis.py
+```
+
+Inside Docker, prefix with `docker compose run --rm backend python /scripts/...`, or use the Make targets: `make audit`, `make train`, `make evaluate`, `make evaluate-calibration`, `make evaluate-locked-test`, `make error-analysis`, or `make model-all` to run the whole pipeline in order.
+
+### Results
+
+Locked held-out test set (n=7,446), calibrated, at threshold 0.44 — compared against the **strongest** of three evidence-completeness baselines:
+
+| | ROC-AUC | PR-AUC | Precision | Recall | F1 | Brier |
+|---|---|---|---|---|---|---|
+| Best baseline | 0.7579 | 0.7987 | 0.8088 | 0.7375 | 0.7715 | 0.2094 |
+| **DisputeWise model** | **0.8990** | **0.9334** | **0.8589** | **0.8705** | **0.8647** | **0.1217** |
+
+Validation ROC-AUC is 0.8996 — within 0.001 of locked test, indicating no overfitting.
+
+### Model artifacts
+
+Artifacts live in `artifacts/` and are **fully reproducible** from committed code and data:
+
+```
+artifacts/models/       risk_model.txt, feature_schema.json, model_config.json,
+                        calibrator.json, training_metrics.json
+artifacts/evaluation/   validation_metrics.json, locked_test_metrics.json,
+                        calibration_report.json, error_analysis_*.json, data_audit.json
+```
+
+To rebuild every artifact from scratch: `make train` (then `make evaluate evaluate-calibration evaluate-locked-test error-analysis`). Training is deterministic, so a rebuild reproduces `risk_model.txt` byte-for-byte. If artifacts are absent, `/score` returns **503** with the remediation command rather than failing opaquely.
+
+Detailed technical notes — feature groups, the layered leakage defenses, calibration method selection, error analysis, and an honest limitations list — are in [docs/phase2.md](docs/phase2.md).
+
 ## Phase 1 exit criteria
 
 - [x] Docker Compose starts Postgres + FastAPI
@@ -149,7 +213,19 @@ Validate the reference layer with `python scripts/verify_reference_data.py` (or 
 - [x] Generation is reproducible for a fixed seed (fixed reference clock — see docs/phase1.md)
 - [x] No duplicate IDs; relational integrity holds
 - [x] `/health`, `/cases`, `/cases/{id}`, `/cases/{id}/evidence` work
-- [x] `/score`, `/decision`, `/draft` return explicit 501s
+- [x] `/score`, `/decision`, `/draft` returned explicit 501s *(`/score` is now implemented — see Phase 2 above)*
 - [x] Tests pass
 
-**ML models, SHAP, RAG, LLM calls, and the frontend are intentionally not implemented in Phase 1.** They are Phase 2–5 scope. **PHASE 2 HAS NOT BEEN IMPLEMENTED.**
+## Phase 2 exit criteria
+
+- [x] Phase 1 locked test set remains byte-identical (checksum `e1e8cd50…93b5c`)
+- [x] Existing Phase 1 tests still pass
+- [x] Data audit, feature pipeline, and leakage tests implemented
+- [x] Customer-level split integrity verified (train/validation/test pairwise disjoint)
+- [x] LightGBM model trained, versioned, and deterministically reproducible
+- [x] Probability calibration implemented and assessed
+- [x] SHAP explanations + human-readable evidence language implemented
+- [x] `/score` returns calibrated probability, model version, and SHAP factors
+- [x] Locked-test evaluation, baseline comparison, and error analysis implemented
+
+**RAG, LLM drafting, the decision engine, and the frontend are intentionally not implemented yet.** They are Phase 3–5 scope. `POST /cases/{id}/decision` and `POST /cases/{id}/draft` remain deliberate 501 stubs. **PHASE 3 HAS NOT BEEN IMPLEMENTED.**

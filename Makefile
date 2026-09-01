@@ -1,4 +1,5 @@
-.PHONY: up down build logs generate lock load load-all verify verify-reference test shell
+.PHONY: up down build logs generate lock load load-all verify verify-reference test shell \
+        audit train evaluate evaluate-calibration evaluate-locked-test error-analysis model-all
 
 up:
 	docker compose up -d --build
@@ -40,3 +41,32 @@ test:
 
 shell:
 	docker compose exec backend bash
+
+# ---------------------------------------------------------------------------
+# Phase 2 -- risk model (LightGBM + calibration + SHAP)
+# ---------------------------------------------------------------------------
+
+# Audit the dataset before modeling. Fails loudly on leakage/split problems.
+audit:
+	docker compose run --rm backend python /scripts/audit_model_data.py --json-out /artifacts/evaluation/data_audit.json
+
+# Train the model. Deterministic: same data + seed 42 -> byte-identical artifacts.
+train:
+	docker compose run --rm backend python /scripts/train_model.py
+
+# Validation metrics + evidence-completeness baseline comparison.
+evaluate:
+	docker compose run --rm backend python /scripts/evaluate_model.py
+
+evaluate-calibration:
+	docker compose run --rm backend python /scripts/evaluate_calibration.py
+
+# OFFICIAL final evaluation. Read-only; verifies the locked checksum before and after.
+evaluate-locked-test:
+	docker compose run --rm backend python /scripts/evaluate_locked_test.py
+
+error-analysis:
+	docker compose run --rm backend python /scripts/error_analysis.py
+
+# Full Phase 2 pipeline, in order.
+model-all: audit train evaluate evaluate-calibration error-analysis evaluate-locked-test

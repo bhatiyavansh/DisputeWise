@@ -1,0 +1,180 @@
+{
+  "evaluated_at": "2026-09-01T20:42:08.961530+00:00",
+  "model_version": "risk-v1",
+  "calibration_method": "sigmoid",
+  "split": "validation",
+  "n_bins": 10,
+  "note": "Calibration was fitted on a customer-disjoint half of validation during training, so the in-sample numbers here are mildly optimistic. The out_of_fold_selection block holds the cross-fitted numbers that actually selected the method. The locked test set was not used for either.",
+  "in_sample_validation": {
+    "raw": {
+      "brier_score": 0.12065615764130928,
+      "ece": 0.01256238672831674,
+      "mean_predicted": 0.6091349388233973,
+      "observed_positive_rate": 0.6135233230272886,
+      "calibration_curve": [
+        {
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "count": 327,
+          "mean_predicted": 0.08657813155631365,
+          "observed_frequency": 0.08868501529051988
+        },
+        {
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "count": 1299,
+          "mean_predicted": 0.14738879010365907,
+          "observed_frequency": 0.15088529638183218
+        },
+        {
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "count": 683,
+          "mean_predicted": 0.24466713401351578,
+          "observed_frequency": 0.23865300146412885
+        },
+        {
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "count": 385,
+          "mean_predicted": 0.34761074084623966,
+          "observed_frequency": 0.4077922077922078
+        },
+        {
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "count": 309,
+          "mean_predicted": 0.4486572871289303,
+          "observed_frequency": 0.4919093851132686
+        },
+        {
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "count": 281,
+          "mean_predicted": 0.5468767573624579,
+          "observed_frequency": 0.5373665480427047
+        },
+        {
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "count": 297,
+          "mean_predicted": 0.6530206570008116,
+          "observed_frequency": 0.6094276094276094
+        },
+        {
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "count": 437,
+          "mean_predicted": 0.754407427712305,
+          "observed_frequency": 0.7299771167048055
+        },
+        {
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "count": 726,
+          "mean_predicted": 0.8553603235422791,
+          "observed_frequency": 0.8553719008264463
+        },
+        {
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "count": 2695,
+          "mean_predicted": 0.9550002554039881,
+          "observed_frequency": 0.9628942486085343
+        }
+      ]
+    },
+    "calibrated": {
+      "brier_score": 0.12066940531869406,
+      "ece": 0.011980026171429693,
+      "mean_predicted": 0.608316357183018,
+      "observed_positive_rate": 0.6135233230272886,
+      "calibration_curve": [
+        {
+          "bin_lower": 0.0,
+          "bin_upper": 0.1,
+          "count": 342,
+          "mean_predicted": 0.08595457220823788,
+          "observed_frequency": 0.08771929824561403
+        },
+        {
+          "bin_lower": 0.1,
+          "bin_upper": 0.2,
+          "count": 1297,
+          "mean_predicted": 0.14677830801285421,
+          "observed_frequency": 0.15111796453353893
+        },
+        {
+          "bin_lower": 0.2,
+          "bin_upper": 0.30000000000000004,
+          "count": 681,
+          "mean_predicted": 0.2443370458735002,
+          "observed_frequency": 0.2422907488986784
+        },
+        {
+          "bin_lower": 0.30000000000000004,
+          "bin_upper": 0.4,
+          "count": 380,
+          "mean_predicted": 0.34767404989743217,
+          "observed_frequency": 0.4131578947368421
+        },
+        {
+          "bin_lower": 0.4,
+          "bin_upper": 0.5,
+          "count": 306,
+          "mean_predicted": 0.4481620456271234,
+          "observed_frequency": 0.4869281045751634
+        },
+        {
+          "bin_lower": 0.5,
+          "bin_upper": 0.6000000000000001,
+          "count": 280,
+          "mean_predicted": 0.5461559516590891,
+          "observed_frequency": 0.5428571428571428
+        },
+        {
+          "bin_lower": 0.6000000000000001,
+          "bin_upper": 0.7000000000000001,
+          "count": 298,
+          "mean_predicted": 0.652753541235409,
+          "observed_frequency": 0.6073825503355704
+        },
+        {
+          "bin_lower": 0.7000000000000001,
+          "bin_upper": 0.8,
+          "count": 436,
+          "mean_predicted": 0.7544220300553277,
+          "observed_frequency": 0.7339449541284404
+        },
+        {
+          "bin_lower": 0.8,
+          "bin_upper": 0.9,
+          "count": 723,
+          "mean_predicted": 0.8553618849103669,
+          "observed_frequency": 0.8547717842323651
+        },
+        {
+          "bin_lower": 0.9,
+          "bin_upper": 1.0,
+          "count": 2696,
+          "mean_predicted": 0.9551377333407974,
+          "observed_frequency": 0.9629080118694362
+        }
+      ]
+    }
+  },
+  "out_of_fold_selection": {
+    "sigmoid": {
+      "oof_brier": 0.12072802281645315,
+      "oof_ece": 0.009218058417748238
+    },
+    "isotonic": {
+      "oof_brier": 0.12138403808545103,
+      "oof_ece": 0.010791933522781811
+    },
+    "uncalibrated": {
+      "oof_brier": 0.12067959780211213,
+      "oof_ece": 0.011475529638320135
+    }
+  }
+}

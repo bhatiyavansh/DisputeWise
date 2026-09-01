@@ -1,0 +1,7 @@
+{
+  "method": "sigmoid",
+  "coefficient": 1.0036584806017217,
+  "intercept": -0.007166921911442533,
+  "x_thresholds": null,
+  "y_thresholds": null
+}

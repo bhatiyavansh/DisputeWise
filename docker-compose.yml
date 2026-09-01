@@ -34,6 +34,7 @@ services:
       - ./backend:/app
       - ./data:/data
       - ./scripts:/scripts
+      - ./artifacts:/artifacts
     depends_on:
       db:
         condition: service_healthy

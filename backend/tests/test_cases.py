@@ -52,10 +52,19 @@ def test_get_case_not_found(client, db_session):
     assert resp.status_code == 404
 
 
-def test_score_endpoint_not_implemented(client, db_session):
+def test_score_endpoint_is_implemented_in_phase_2(client, db_session):
+    """/score was a Phase 1 stub; Phase 2 implements it.
+
+    This assertion was intentionally inverted when the risk model landed --
+    it is the one Phase 1 expectation Phase 2 is supposed to change. The
+    endpoint's behavior is covered in depth by tests/test_score_api.py.
+    503 is accepted for environments where model artifacts have not been
+    built (see README: python scripts/train_model.py).
+    """
     make_case(db_session, dispute_id="DSP-000001")
     resp = client.post("/cases/DSP-000001/score")
-    assert resp.status_code == 501
+    assert resp.status_code in (200, 503)
+    assert resp.status_code != 501, "/score must no longer be a stub"
 
 
 def test_decision_endpoint_not_implemented(client, db_session):

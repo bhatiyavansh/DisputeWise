@@ -1,0 +1,514 @@
+{
+  "locked_test": {
+    "recorded_checksum": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+    "actual_checksum": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c"
+  },
+  "structure": {
+    "train": {
+      "row_counts": {
+        "customers": 16769,
+        "transactions": 35115,
+        "disputes": 35115,
+        "evidence": 561840,
+        "outcomes": 35115
+      }
+    },
+    "validation": {
+      "row_counts": {
+        "customers": 3553,
+        "transactions": 7439,
+        "disputes": 7439,
+        "evidence": 119024,
+        "outcomes": 7439
+      }
+    },
+    "test": {
+      "row_counts": {
+        "customers": 3544,
+        "transactions": 7446,
+        "disputes": 7446,
+        "evidence": 119136,
+        "outcomes": 7446
+      }
+    }
+  },
+  "columns": {
+    "customers": {
+      "customer_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "account_created_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "country": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "account_age_days": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "previous_order_count": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "previous_successful_order_count": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "previous_dispute_count": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "previous_refund_count": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      }
+    },
+    "transactions": {
+      "transaction_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "customer_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "merchant_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "amount": {
+        "dtype": "float64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "currency": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "payment_method": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "created_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "captured_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "status": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "device_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "ip_address": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "billing_address_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "shipping_address_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "avs_result": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "cvv_result": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "three_ds_authenticated": {
+        "dtype": "bool",
+        "null_count": 0,
+        "null_fraction": 0.0
+      }
+    },
+    "disputes": {
+      "dispute_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "transaction_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "reason_code": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "dispute_amount": {
+        "dtype": "float64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "created_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "response_deadline": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "status": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "scenario_archetype": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      }
+    },
+    "evidence": {
+      "evidence_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "dispute_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "evidence_type": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "available": {
+        "dtype": "bool",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "value": {
+        "dtype": "object",
+        "null_count": 99226,
+        "null_fraction": 0.176609
+      },
+      "relevance": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "strength": {
+        "dtype": "float64",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "created_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      }
+    },
+    "outcomes": {
+      "dispute_id": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "favorable_outcome": {
+        "dtype": "bool",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "outcome_at": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "outcome_source": {
+        "dtype": "object",
+        "null_count": 0,
+        "null_fraction": 0.0
+      },
+      "recovery_amount": {
+        "dtype": "float64",
+        "null_count": 13750,
+        "null_fraction": 0.391571
+      }
+    }
+  },
+  "cardinalities": {
+    "categorical": {
+      "transactions.merchant_id": {
+        "cardinality": 40,
+        "top": {
+          "MERCH-0021": 949,
+          "MERCH-0007": 948,
+          "MERCH-0017": 941,
+          "MERCH-0009": 920,
+          "MERCH-0034": 915,
+          "MERCH-0025": 914
+        }
+      },
+      "transactions.payment_method": {
+        "cardinality": 3,
+        "top": {
+          "card": 21026,
+          "upi": 10703,
+          "netbanking": 3386
+        }
+      },
+      "transactions.status": {
+        "cardinality": 3,
+        "top": {
+          "captured": 31598,
+          "refunded": 2487,
+          "failed": 1030
+        }
+      },
+      "transactions.currency": {
+        "cardinality": 1,
+        "top": {
+          "INR": 35115
+        }
+      },
+      "transactions.avs_result": {
+        "cardinality": 4,
+        "top": {
+          "Y": 16537,
+          "M": 6281,
+          "N": 6192,
+          "U": 6105
+        }
+      },
+      "transactions.cvv_result": {
+        "cardinality": 3,
+        "top": {
+          "M": 17136,
+          "N": 9016,
+          "U": 8963
+        }
+      },
+      "customers.country": {
+        "cardinality": 5,
+        "top": {
+          "IN": 8428,
+          "GB": 2156,
+          "US": 2105,
+          "SG": 2044,
+          "AE": 2036
+        }
+      },
+      "disputes.reason_code": {
+        "cardinality": 3,
+        "top": {
+          "unauthorized_transaction": 13602,
+          "goods_not_received": 12773,
+          "duplicate_charge": 8740
+        }
+      },
+      "disputes.status": {
+        "cardinality": 4,
+        "top": {
+          "closed": 24561,
+          "under_review": 3571,
+          "evidence_submitted": 3501,
+          "open": 3482
+        }
+      },
+      "disputes.scenario_archetype": {
+        "cardinality": 4,
+        "top": {
+          "strong_legitimate": 12167,
+          "weak": 10522,
+          "ambiguous": 7128,
+          "high_value_strong": 5298
+        }
+      },
+      "evidence.evidence_type": {
+        "cardinality": 16,
+        "top": {
+          "three_ds": 35115,
+          "avs": 35115,
+          "cvv": 35115,
+          "device_match": 35115,
+          "ip_match": 35115,
+          "delivery_confirmed": 35115
+        }
+      },
+      "evidence.relevance": {
+        "cardinality": 3,
+        "top": {
+          "low": 293538,
+          "high": 171697,
+          "medium": 96605
+        }
+      }
+    },
+    "numeric": {
+      "transactions.amount": {
+        "min": 99.0,
+        "p50": 1176.02,
+        "p99": 19465.041,
+        "max": 98055.91,
+        "mean": 2359.5943
+      },
+      "disputes.dispute_amount": {
+        "min": 99.0,
+        "p50": 1176.02,
+        "p99": 19465.041,
+        "max": 98055.91,
+        "mean": 2359.5943
+      },
+      "customers.account_age_days": {
+        "min": 1.0,
+        "p50": 266.0,
+        "p99": 1236.96,
+        "max": 3184.0,
+        "mean": 331.8501
+      },
+      "customers.previous_order_count": {
+        "min": 0.0,
+        "p50": 4.0,
+        "p99": 12.0,
+        "max": 20.0,
+        "mean": 4.1075
+      },
+      "customers.previous_dispute_count": {
+        "min": 0.0,
+        "p50": 0.0,
+        "p99": 2.0,
+        "max": 4.0,
+        "mean": 0.2619
+      },
+      "evidence.strength": {
+        "min": 0.0,
+        "p50": 0.6135,
+        "p99": 0.9923,
+        "max": 1.0,
+        "mean": 0.4903
+      }
+    }
+  },
+  "target": {
+    "train": {
+      "count": 35115,
+      "positive_rate": 0.608429
+    },
+    "validation": {
+      "count": 7439,
+      "positive_rate": 0.613523
+    },
+    "test": {
+      "count": 7446,
+      "positive_rate": 0.620064
+    }
+  },
+  "split_disjointness": {
+    "train__validation__customers": 0,
+    "train__validation__transactions": 0,
+    "train__validation__disputes": 0,
+    "train__test__customers": 0,
+    "train__test__transactions": 0,
+    "train__test__disputes": 0,
+    "validation__test__customers": 0,
+    "validation__test__transactions": 0,
+    "validation__test__disputes": 0
+  },
+  "evidence": {
+    "train": {
+      "evidence_per_dispute": {
+        "16": 35115
+      },
+      "distinct_evidence_types": 16,
+      "available_rate": 0.823391
+    },
+    "validation": {
+      "evidence_per_dispute": {
+        "16": 7439
+      },
+      "distinct_evidence_types": 16,
+      "available_rate": 0.822498
+    },
+    "test": {
+      "evidence_per_dispute": {
+        "16": 7446
+      },
+      "distinct_evidence_types": 16,
+      "available_rate": 0.823764
+    }
+  },
+  "reason_codes": {
+    "train": {
+      "unauthorized_transaction": 0.3874,
+      "goods_not_received": 0.3637,
+      "duplicate_charge": 0.2489
+    },
+    "validation": {
+      "unauthorized_transaction": 0.3931,
+      "goods_not_received": 0.3521,
+      "duplicate_charge": 0.2549
+    },
+    "test": {
+      "unauthorized_transaction": 0.382,
+      "goods_not_received": 0.359,
+      "duplicate_charge": 0.2591
+    }
+  },
+  "leakage": {
+    "perfect_separators": [
+      "outcomes.recovery_amount"
+    ],
+    "checked_columns": [
+      "outcomes.outcome_at",
+      "outcomes.outcome_source",
+      "outcomes.recovery_amount"
+    ],
+    "suspicious_features": [],
+    "top_target_correlations": {
+      "strong_evidence_count": 0.6562,
+      "evidence_strength_mean": 0.6286,
+      "fulfillment_evidence_strength_mean": 0.5747,
+      "authentication_evidence_strength_mean": 0.562,
+      "ev_delivery_confirmed_value": 0.5429,
+      "ev_three_ds_value": 0.4883,
+      "three_ds_authenticated": 0.488,
+      "ev_cvv_value": 0.4784,
+      "cvv_match": 0.4769,
+      "avs_match": 0.4578
+    }
+  },
+  "failures": []
+}

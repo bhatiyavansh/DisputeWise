@@ -58,3 +58,62 @@ def client(db_session):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 (ML) fixtures
+#
+# Dataset and model artifacts are reproducible rather than committed, so these
+# fixtures skip cleanly when a checkout has not yet run the generator or
+# scripts/train_model.py.
+# ---------------------------------------------------------------------------
+
+
+def _ml_available() -> bool:
+    try:
+        import lightgbm  # noqa: F401
+        import shap  # noqa: F401
+        import sklearn  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@pytest.fixture(scope="session")
+def train_split():
+    if not _ml_available():
+        pytest.skip("ML dependencies not installed")
+    from app.ml.data import load_split
+
+    try:
+        return load_split("train")
+    except FileNotFoundError as exc:
+        pytest.skip(f"training data not generated: {exc}")
+
+
+@pytest.fixture(scope="session")
+def train_features(train_split):
+    from app.ml.features import build_features
+
+    return build_features(
+        train_split.disputes, train_split.transactions, train_split.customers, train_split.evidence
+    )
+
+
+@pytest.fixture(scope="session")
+def train_target(train_split, train_features):
+    from app.ml.features import extract_target
+
+    return extract_target(train_split.outcomes, train_features.index)
+
+
+@pytest.fixture(scope="session")
+def risk_model():
+    if not _ml_available():
+        pytest.skip("ML dependencies not installed")
+    from app.ml.model import ModelNotAvailableError, load_model
+
+    try:
+        return load_model()
+    except ModelNotAvailableError as exc:
+        pytest.skip(f"model artifacts not present: {exc}")

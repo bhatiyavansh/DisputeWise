@@ -71,6 +71,61 @@ def test_train_validation_split_counts_unchanged():
         assert actual_count == expected_count, f"split '{split}' row count changed"
 
 
+@pytest.mark.skipif(not GENERATED_DIR.exists(), reason="data/generated not present in this checkout")
+def test_customer_disjointness():
+    """Customer-level split integrity -- the property Phase 2 modeling relies on.
+
+    If customers appeared in more than one split, validation and locked-test
+    metrics would be inflated by memorized customer history.
+    """
+    import csv
+
+    customers_by_split: dict[str, set[str]] = {}
+    for split, directory in [
+        ("train", GENERATED_DIR / "train"),
+        ("validation", GENERATED_DIR / "validation"),
+        ("test", LOCKED_TEST_DIR),
+    ]:
+        path = directory / "customers.csv"
+        if not path.exists():
+            pytest.skip(f"{path} not present in this checkout")
+        with open(path) as f:
+            customers_by_split[split] = {row["customer_id"] for row in csv.DictReader(f)}
+
+    splits = list(customers_by_split)
+    for i, left in enumerate(splits):
+        for right in splits[i + 1 :]:
+            overlap = customers_by_split[left] & customers_by_split[right]
+            assert not overlap, (
+                f"{len(overlap)} customers appear in both {left} and {right} "
+                f"(e.g. {sorted(overlap)[:3]}) -- customer-level split integrity is broken"
+            )
+
+
+@pytest.mark.skipif(not GENERATED_DIR.exists(), reason="data/generated not present in this checkout")
+def test_dispute_and_transaction_ids_disjoint_across_splits():
+    import csv
+
+    for table, key in [("disputes", "dispute_id"), ("transactions", "transaction_id")]:
+        ids_by_split: dict[str, set[str]] = {}
+        for split, directory in [
+            ("train", GENERATED_DIR / "train"),
+            ("validation", GENERATED_DIR / "validation"),
+            ("test", LOCKED_TEST_DIR),
+        ]:
+            path = directory / f"{table}.csv"
+            if not path.exists():
+                pytest.skip(f"{path} not present in this checkout")
+            with open(path) as f:
+                ids_by_split[split] = {row[key] for row in csv.DictReader(f)}
+
+        splits = list(ids_by_split)
+        for i, left in enumerate(splits):
+            for right in splits[i + 1 :]:
+                overlap = ids_by_split[left] & ids_by_split[right]
+                assert not overlap, f"{table}.{key} overlap between {left} and {right}"
+
+
 def test_generator_still_anchors_timestamps_to_a_fixed_reference():
     """Regression guard: an earlier bug used datetime.now() for relative
     timestamps inside the data-generation path, which made two runs with the

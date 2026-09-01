@@ -1,0 +1,44 @@
+{
+  "model_version": "risk-v1",
+  "feature_schema_version": "features-v1",
+  "dataset_version": "disputewise_synthetic_v1",
+  "algorithm": "LightGBM binary classifier",
+  "objective": "binary",
+  "seed": 42,
+  "params": {
+    "objective": "binary",
+    "metric": [
+      "auc",
+      "binary_logloss"
+    ],
+    "verbosity": -1,
+    "seed": 42,
+    "bagging_seed": 42,
+    "feature_fraction_seed": 42,
+    "data_random_seed": 42,
+    "deterministic": true,
+    "force_row_wise": true,
+    "num_threads": 4,
+    "num_leaves": 31,
+    "learning_rate": 0.03,
+    "min_data_in_leaf": 200,
+    "feature_fraction": 0.7,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 1,
+    "lambda_l2": 10.0
+  },
+  "num_boost_round": 212,
+  "calibration_method": "sigmoid",
+  "operating_threshold": 0.44,
+  "trained_at": "2026-09-01T20:40:45.076906+00:00",
+  "locked_test_checksum_at_training": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+  "split_usage": {
+    "train": "model fitting",
+    "val_a": "early stopping + hyperparameter selection",
+    "val_b": "calibration fitting/selection, threshold selection, reported validation metrics",
+    "locked_test": "never used during training"
+  },
+  "train_rows": 35115,
+  "val_a_rows": 3752,
+  "val_b_rows": 3687
+}
