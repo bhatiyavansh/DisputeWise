@@ -1,0 +1,49 @@
+reason_code_id,evidence_type,relevance,description,source_id
+unauthorized_transaction,three_ds,high,3-D Secure authentication result at time of purchase; issuers weigh this as proof the cardholder authenticated the card-not-present transaction.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,avs,high,Address Verification Service match between the billing address supplied and the card issuer's records on file.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,cvv,high,"CVV/CVC match result, used alongside AVS to support that the purchaser held the physical card.",stripe_dispute_reason_codes_2026
+unauthorized_transaction,device_match,high,Device ID/fingerprint consistency with the cardholder's known devices; one of the required matching data elements under Visa's Compelling Evidence 3.0 (CE 3.0) process for fraud reason codes.,visa_verifi_compelling_evidence
+unauthorized_transaction,ip_match,high,Purchaser IP address consistency with prior legitimate activity; one of the required matching data elements under Visa CE 3.0.,visa_verifi_compelling_evidence
+unauthorized_transaction,delivery_confirmed,low,Fulfillment evidence is secondary for a fraud claim; relevant mainly to corroborate that goods reached the account holder.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,tracking_available,low,Fulfillment evidence is secondary for a fraud claim.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,delivery_address_match,low,Shipping-address match can support CE 3.0's 'possession proof' for business-address deliveries but is not a primary signal for CNP fraud.,visa_verifi_compelling_evidence
+unauthorized_transaction,delivery_timestamp,low,Fulfillment timing is secondary for a fraud claim.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,proof_of_delivery,low,Fulfillment evidence is secondary for a fraud claim.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,prior_order_history,medium,Visa CE 3.0 allows two or more prior undisputed transactions with matching data elements as compelling evidence of cardholder participation.,visa_verifi_compelling_evidence
+unauthorized_transaction,prior_successful_orders,medium,"A pattern of prior undisputed, successfully completed orders from the same cardholder strengthens a CE 3.0-style defense.",visa_verifi_compelling_evidence
+unauthorized_transaction,prior_disputes,high,A cardholder's prior dispute history is relevant context issuers and merchants weigh when assessing the credibility of a new fraud claim.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,customer_communication_available,medium,Stripe notes the cardholder is expected to have proactively contacted the merchant about a problem before filing a dispute; any such contact (or its absence) is relevant evidence.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,cancellation_request,low,Not directly relevant to a fraud/authorization claim.,stripe_dispute_reason_codes_2026
+unauthorized_transaction,refund_request,low,Not directly relevant to a fraud/authorization claim.,stripe_dispute_reason_codes_2026
+goods_not_received,three_ds,low,Authentication evidence does not address whether goods were delivered.,stripe_dispute_reason_codes_2026
+goods_not_received,avs,low,Authentication evidence does not address whether goods were delivered.,stripe_dispute_reason_codes_2026
+goods_not_received,cvv,low,Authentication evidence does not address whether goods were delivered.,stripe_dispute_reason_codes_2026
+goods_not_received,device_match,low,Authentication evidence does not address whether goods were delivered.,stripe_dispute_reason_codes_2026
+goods_not_received,ip_match,low,Authentication evidence does not address whether goods were delivered.,stripe_dispute_reason_codes_2026
+goods_not_received,delivery_confirmed,high,"Proof of shipment and delivery -- tracking details, carrier confirmation, or signed delivery receipts -- is Stripe's primary recommended evidence for 'merchandise or services not received' (Visa 13.1 / Mastercard 4855).",stripe_dispute_reason_codes_2026
+goods_not_received,tracking_available,high,Carrier tracking details are explicitly recommended evidence for this reason code.,stripe_dispute_reason_codes_2026
+goods_not_received,delivery_address_match,high,Delivery-address consistency with the order's shipping address supports that the goods were sent to the cardholder.,stripe_dispute_reason_codes_2026
+goods_not_received,delivery_timestamp,high,Delivery timestamp relative to the expected/promised delivery date is part of proof-of-shipment evidence.,stripe_dispute_reason_codes_2026
+goods_not_received,proof_of_delivery,high,Signed delivery receipt or carrier proof-of-delivery confirmation is explicitly recommended evidence for this reason code.,stripe_dispute_reason_codes_2026
+goods_not_received,prior_order_history,low,Order history is not a primary factor for a fulfillment claim.,stripe_dispute_reason_codes_2026
+goods_not_received,prior_successful_orders,low,Order history is not a primary factor for a fulfillment claim.,stripe_dispute_reason_codes_2026
+goods_not_received,prior_disputes,low,Prior dispute history is not a primary factor for a fulfillment claim.,stripe_dispute_reason_codes_2026
+goods_not_received,customer_communication_available,medium,"Stripe recommends including customer interactions confirming receipt, troubleshooting requests, or delivery enquiries.",stripe_dispute_reason_codes_2026
+goods_not_received,cancellation_request,medium,Whether the customer requested cancellation before or after shipment is relevant context for this reason code.,stripe_dispute_reason_codes_2026
+goods_not_received,refund_request,medium,Whether a refund was requested/issued for undelivered goods is relevant context for this reason code.,stripe_dispute_reason_codes_2026
+duplicate_charge,three_ds,low,Authentication evidence does not distinguish a genuine duplicate charge from two authorized transactions.,stripe_dispute_reason_codes_2026
+duplicate_charge,avs,low,Authentication evidence does not distinguish a genuine duplicate charge from two authorized transactions.,stripe_dispute_reason_codes_2026
+duplicate_charge,cvv,low,Authentication evidence does not distinguish a genuine duplicate charge from two authorized transactions.,stripe_dispute_reason_codes_2026
+duplicate_charge,device_match,low,Authentication evidence does not distinguish a genuine duplicate charge from two authorized transactions.,stripe_dispute_reason_codes_2026
+duplicate_charge,ip_match,low,Authentication evidence does not distinguish a genuine duplicate charge from two authorized transactions.,stripe_dispute_reason_codes_2026
+duplicate_charge,delivery_confirmed,low,Fulfillment evidence is not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,tracking_available,low,Fulfillment evidence is not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,delivery_address_match,low,Fulfillment evidence is not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,delivery_timestamp,low,Fulfillment evidence is not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,proof_of_delivery,low,Fulfillment evidence is not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,prior_order_history,high,Order/transaction history and system logs showing only one charge was successfully processed is Stripe's primary recommended evidence for this reason code (Visa 12.6.1 / Mastercard 4834).,stripe_dispute_reason_codes_2026
+duplicate_charge,prior_successful_orders,high,Transaction/payment processing records distinguishing a genuine duplicate from two separate legitimate orders are explicitly recommended evidence.,stripe_dispute_reason_codes_2026
+duplicate_charge,prior_disputes,medium,Prior dispute history provides secondary context on the cardholder's dispute pattern.,stripe_dispute_reason_codes_2026
+duplicate_charge,customer_communication_available,medium,"Stripe recommends including customer communications that clarify or dispute the charge, e.g. where a cardholder inquired before filing.",stripe_dispute_reason_codes_2026
+duplicate_charge,cancellation_request,low,Not a primary factor for a duplicate-processing claim.,stripe_dispute_reason_codes_2026
+duplicate_charge,refund_request,high,Refund records are Stripe's primary recommended evidence when a duplicate charge occurred and was already refunded -- proof of the credit transaction is the key defense.,stripe_dispute_reason_codes_2026

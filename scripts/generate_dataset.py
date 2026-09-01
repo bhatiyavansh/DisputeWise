@@ -1,0 +1,707 @@
+#!/usr/bin/env python3
+"""Reproducible synthetic chargeback dataset generator for DisputeWise Phase 1.
+
+Produces five relational tables (customers, transactions, disputes, evidence,
+outcomes) for ~N synthetic chargeback cases, split 70/15/15 at the customer
+level into train/validation/test, and writes them as CSVs under
+data/generated/{split}/.
+
+The favorable_outcome target is sampled from a latent logistic probability
+model built from many weakly-correlated, noisy signals -- not from any single
+deterministic rule -- so the resulting dataset is suitable for training a real
+classifier in Phase 2. See docs/phase1.md for the full model description.
+
+Usage:
+    python scripts/generate_dataset.py --seed 42 --n-cases 50000
+    python scripts/generate_dataset.py --seed 42 --n-cases 50000 --lock
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import shutil
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+import numpy as np
+import pandas as pd
+
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
+from dataset_common import (  # noqa: E402
+    DATASET_SCHEMA_VERSION,
+    GENERATED_DIR,
+    LOCKED_TEST_DIR,
+    METADATA_DIR,
+)
+
+ARCHETYPES = ["strong_legitimate", "weak", "ambiguous", "high_value_strong"]
+ARCHETYPE_PROPORTIONS = {
+    "strong_legitimate": 0.35,
+    "weak": 0.30,
+    "ambiguous": 0.20,
+    "high_value_strong": 0.15,
+}
+
+REASON_CODES = ["unauthorized_transaction", "goods_not_received", "duplicate_charge"]
+COUNTRIES = ["IN", "IN", "IN", "IN", "US", "AE", "GB", "SG"]  # India-weighted merchant base
+PAYMENT_METHODS = ["card", "upi", "netbanking"]
+PAYMENT_METHOD_WEIGHTS = [0.6, 0.3, 0.1]
+
+AUTH_EVIDENCE = ["three_ds", "avs", "cvv", "device_match", "ip_match"]
+FULFILLMENT_EVIDENCE = [
+    "delivery_confirmed",
+    "tracking_available",
+    "delivery_address_match",
+    "delivery_timestamp",
+    "proof_of_delivery",
+]
+CUSTOMER_EVIDENCE = ["prior_order_history", "prior_successful_orders", "prior_disputes"]
+COMMUNICATION_EVIDENCE = [
+    "customer_communication_available",
+    "cancellation_request",
+    "refund_request",
+]
+ALL_EVIDENCE_TYPES = AUTH_EVIDENCE + FULFILLMENT_EVIDENCE + CUSTOMER_EVIDENCE + COMMUNICATION_EVIDENCE
+
+# Evidence relevance varies by dispute reason code -- this is what Phase 2's
+# evidence-matrix builder will key off of. "high"/"medium"/"low".
+RELEVANCE_MAP: dict[str, dict[str, str]] = {
+    "unauthorized_transaction": {
+        "three_ds": "high",
+        "avs": "high",
+        "cvv": "high",
+        "device_match": "high",
+        "ip_match": "high",
+        "delivery_confirmed": "low",
+        "tracking_available": "low",
+        "delivery_address_match": "low",
+        "delivery_timestamp": "low",
+        "proof_of_delivery": "low",
+        "prior_order_history": "medium",
+        "prior_successful_orders": "medium",
+        "prior_disputes": "high",
+        "customer_communication_available": "medium",
+        "cancellation_request": "low",
+        "refund_request": "low",
+    },
+    "goods_not_received": {
+        "three_ds": "low",
+        "avs": "low",
+        "cvv": "low",
+        "device_match": "low",
+        "ip_match": "low",
+        "delivery_confirmed": "high",
+        "tracking_available": "high",
+        "delivery_address_match": "high",
+        "delivery_timestamp": "high",
+        "proof_of_delivery": "high",
+        "prior_order_history": "low",
+        "prior_successful_orders": "low",
+        "prior_disputes": "low",
+        "customer_communication_available": "medium",
+        "cancellation_request": "medium",
+        "refund_request": "medium",
+    },
+    "duplicate_charge": {
+        "three_ds": "low",
+        "avs": "low",
+        "cvv": "low",
+        "device_match": "low",
+        "ip_match": "low",
+        "delivery_confirmed": "low",
+        "tracking_available": "low",
+        "delivery_address_match": "low",
+        "delivery_timestamp": "low",
+        "proof_of_delivery": "low",
+        "prior_order_history": "high",
+        "prior_successful_orders": "high",
+        "prior_disputes": "medium",
+        "customer_communication_available": "medium",
+        "cancellation_request": "low",
+        "refund_request": "high",
+    },
+}
+
+RELEVANCE_WEIGHT = {"high": 1.0, "medium": 0.5, "low": 0.15}
+
+DISPUTE_STATUSES = ["open", "evidence_submitted", "under_review", "closed"]
+DISPUTE_STATUS_WEIGHTS = [0.10, 0.10, 0.10, 0.70]
+
+
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
+
+
+@dataclass
+class GeneratorConfig:
+    seed: int = 42
+    n_cases: int = 50_000
+    train_frac: float = 0.70
+    val_frac: float = 0.15
+    test_frac: float = 0.15
+
+
+# Fixed reference instant that all relative (created_at, account_age, ...)
+# timestamps are computed from. Using wall-clock `datetime.now()` here would
+# make the generated bytes differ between two runs with the identical seed,
+# which breaks reproducibility and locked-test-set checksums.
+ANCHOR_NOW = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def generate_customers(rng: np.random.Generator, n_customers: int) -> pd.DataFrame:
+    """Customer profiles with a latent 'quality' score driving history stats.
+
+    Quality is not stored directly (it is a generation-time latent variable),
+    only its noisy downstream effects are -- this is intentional so the
+    target cannot be trivially reconstructed from one clean feature.
+    """
+    quality = rng.beta(2.2, 2.2, size=n_customers)  # spread across [0,1], centered ~0.5
+
+    account_age_days = np.clip(
+        (rng.gamma(shape=2.0, scale=180.0, size=n_customers) * (0.4 + quality)).astype(int), 1, 3650
+    )
+    account_created_at = [ANCHOR_NOW - timedelta(days=int(d)) for d in account_age_days]
+
+    previous_order_count = rng.poisson(lam=np.clip(quality * 8, 0.1, None), size=n_customers)
+    success_rate = np.clip(0.12 + 0.78 * quality + rng.normal(0, 0.06, n_customers), 0.03, 0.99)
+    previous_successful_order_count = np.round(previous_order_count * success_rate).astype(int)
+
+    dispute_propensity = np.clip(0.35 * (1 - quality) + rng.normal(0, 0.06, n_customers), 0.0, None)
+    previous_dispute_count = rng.poisson(lam=dispute_propensity * 1.5, size=n_customers)
+    previous_refund_count = rng.poisson(lam=np.clip(0.15 * (1 - quality) + 0.05, 0, None), size=n_customers)
+
+    country = rng.choice(COUNTRIES, size=n_customers)
+
+    customer_ids = [f"CUST-{i:06d}" for i in range(1, n_customers + 1)]
+
+    df = pd.DataFrame(
+        {
+            "customer_id": customer_ids,
+            "account_created_at": account_created_at,
+            "country": country,
+            "account_age_days": account_age_days,
+            "previous_order_count": previous_order_count,
+            "previous_successful_order_count": previous_successful_order_count,
+            "previous_dispute_count": previous_dispute_count,
+            "previous_refund_count": previous_refund_count,
+        }
+    )
+    df["_quality"] = quality  # generation-time only, dropped before writing CSVs
+
+    # home device/ip a customer "usually" transacts from
+    df["_home_device"] = [f"DEV-{rng.integers(10**9, 10**10 - 1)}" for _ in range(n_customers)]
+    df["_home_ip"] = [
+        f"{rng.integers(1,223)}.{rng.integers(0,255)}.{rng.integers(0,255)}.{rng.integers(1,254)}"
+        for _ in range(n_customers)
+    ]
+    return df
+
+
+def assign_splits(rng: np.random.Generator, n: int, train_frac: float, val_frac: float) -> np.ndarray:
+    u = rng.random(n)
+    splits = np.where(u < train_frac, "train", np.where(u < train_frac + val_frac, "validation", "test"))
+    return splits
+
+
+def pick_customer_indices(
+    rng: np.random.Generator, archetypes: np.ndarray, quality: np.ndarray
+) -> np.ndarray:
+    """Weighted (not deterministic) sampling of a customer per case.
+
+    Higher-quality customers are more likely -- but not guaranteed -- to be
+    drawn into strong_legitimate/high_value_strong cases, and lower-quality
+    customers into weak cases. This creates realistic, noisy correlation
+    between customer history and case archetype without hard-coding it.
+    """
+    n = len(archetypes)
+    n_customers = len(quality)
+    out = np.empty(n, dtype=np.int64)
+
+    bias = {
+        "strong_legitimate": 2.5,
+        "high_value_strong": 2.0,
+        "ambiguous": 0.0,
+        "weak": -2.5,
+    }
+
+    for archetype in ARCHETYPES:
+        mask = archetypes == archetype
+        count = int(mask.sum())
+        if count == 0:
+            continue
+        logits = bias[archetype] * (quality - 0.5) + rng.normal(0, 1.0, n_customers)
+        weights = np.exp(logits - logits.max())
+        weights /= weights.sum()
+        out[mask] = rng.choice(n_customers, size=count, p=weights)
+
+    return out
+
+
+def generate_cases(rng: np.random.Generator, cfg: GeneratorConfig, customers: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    n = cfg.n_cases
+
+    archetypes = rng.choice(ARCHETYPES, size=n, p=[ARCHETYPE_PROPORTIONS[a] for a in ARCHETYPES])
+    customer_idx = pick_customer_indices(rng, archetypes, customers["_quality"].to_numpy())
+
+    cust = customers.iloc[customer_idx].reset_index(drop=True)
+    split = cust["customer_id"].map(
+        dict(zip(customers["customer_id"], customers["_split"]))
+    ).to_numpy()
+
+    is_strong = np.isin(archetypes, ["strong_legitimate", "high_value_strong"])
+    is_weak = archetypes == "weak"
+    is_ambiguous = archetypes == "ambiguous"
+    is_high_value = archetypes == "high_value_strong"
+    is_strong_leg = archetypes == "strong_legitimate"
+
+    # 4-way select helper: [strong_legitimate, high_value_strong, weak, ambiguous]
+    def tier4(strong_leg: float, high_value: float, weak: float, ambiguous: float) -> np.ndarray:
+        return np.select(
+            [is_strong_leg, is_high_value, is_weak, is_ambiguous],
+            [strong_leg, high_value, weak, ambiguous],
+            default=ambiguous,
+        )
+
+    # ---- transaction fields -------------------------------------------------
+    base_amount = rng.lognormal(mean=6.9, sigma=0.75, size=n)  # skewed, ~ few hundred to few thousand INR
+    amount = np.where(is_high_value, base_amount * rng.uniform(3.5, 9.0, n), base_amount)
+    amount = np.round(np.clip(amount, 99, 250_000), 2)
+
+    created_at = [
+        ANCHOR_NOW - timedelta(days=int(d), hours=int(h))
+        for d, h in zip(rng.integers(1, 180, n), rng.integers(0, 24, n))
+    ]
+    captured_at = [c + timedelta(minutes=int(m)) for c, m in zip(created_at, rng.integers(1, 120, n))]
+
+    txn_status = rng.choice(
+        ["captured", "captured", "captured", "refunded", "failed"], size=n, p=[0.55, 0.2, 0.15, 0.07, 0.03]
+    )
+
+    payment_method = rng.choice(PAYMENT_METHODS, size=n, p=PAYMENT_METHOD_WEIGHTS)
+
+    three_ds_p = tier4(0.88, 0.62, 0.04, 0.34)
+    three_ds_authenticated = rng.random(n) < three_ds_p
+
+    avs_match_p = tier4(0.85, 0.58, 0.06, 0.34)
+    avs_hit = rng.random(n) < avs_match_p
+    avs_result = np.where(avs_hit, "Y", rng.choice(["N", "U", "M"], size=n))
+
+    cvv_match_p = tier4(0.90, 0.60, 0.07, 0.34)
+    cvv_hit = rng.random(n) < cvv_match_p
+    cvv_result = np.where(cvv_hit, "M", rng.choice(["N", "U"], size=n))
+
+    device_match_p = tier4(0.85, 0.58, 0.08, 0.34)
+    device_match = rng.random(n) < device_match_p
+    device_id = np.where(device_match, cust["_home_device"], [f"DEV-{rng.integers(10**9, 10**10-1)}" for _ in range(n)])
+
+    ip_match_p = tier4(0.80, 0.55, 0.07, 0.34)
+    ip_match = rng.random(n) < ip_match_p
+    ip_address = np.where(
+        ip_match,
+        cust["_home_ip"],
+        [f"{rng.integers(1,223)}.{rng.integers(0,255)}.{rng.integers(0,255)}.{rng.integers(1,254)}" for _ in range(n)],
+    )
+
+    billing_address_id = [f"ADDR-{rng.integers(10**6, 10**7-1)}" for _ in range(n)]
+    addr_match_p = tier4(0.88, 0.60, 0.20, 0.40)
+    addr_match = rng.random(n) < addr_match_p
+    shipping_address_id = np.where(addr_match, billing_address_id, [f"ADDR-{rng.integers(10**6, 10**7-1)}" for _ in range(n)])
+
+    merchant_id = rng.choice([f"MERCH-{i:04d}" for i in range(1, 41)], size=n)
+
+    # ---- dispute fields -------------------------------------------------------
+    reason_probs = np.where(
+        is_weak[:, None], np.array([0.55, 0.30, 0.15]),
+        np.where(is_high_value[:, None], np.array([0.20, 0.35, 0.45]), np.array([0.35, 0.40, 0.25])),
+    )
+    reason_code = np.array([rng.choice(REASON_CODES, p=p) for p in reason_probs])
+
+    dispute_created_at = [
+        c + timedelta(days=int(g)) for c, g in zip(captured_at, rng.integers(1, 45, n))
+    ]
+    response_deadline = [
+        d + timedelta(days=int(w)) for d, w in zip(dispute_created_at, rng.choice([14, 20, 30], size=n))
+    ]
+    dispute_status = rng.choice(DISPUTE_STATUSES, size=n, p=DISPUTE_STATUS_WEIGHTS)
+
+    dispute_amount = amount  # 1:1 txn:dispute in this schema
+
+    # ---- fulfillment-evidence latent booleans (drive both evidence rows & p) --
+    delivery_confirmed_p = tier4(0.85, 0.58, 0.05, 0.34)
+    delivery_confirmed = rng.random(n) < delivery_confirmed_p
+    tracking_available = np.where(delivery_confirmed, rng.random(n) < 0.9, rng.random(n) < 0.15)
+    proof_of_delivery = np.where(delivery_confirmed, rng.random(n) < 0.75, rng.random(n) < 0.03)
+    delivery_addr_match_p = tier4(0.85, 0.58, 0.08, 0.34)
+    delivery_address_match_evd = rng.random(n) < delivery_addr_match_p
+
+    # ---- communication evidence --
+    comms_p = np.select([is_strong, is_weak, is_ambiguous], [0.55, 0.20, 0.40], default=0.40)
+    customer_comms = rng.random(n) < comms_p
+    cancellation_request = rng.random(n) < np.select([is_weak], [0.12], default=0.04)
+    refund_request = rng.random(n) < np.select([is_weak, is_ambiguous], [0.18, 0.10], default=0.06)
+
+    # ---- missingness: whether each evidence item was even captured ------------
+    def missing_mask(base_p: float) -> np.ndarray:
+        return rng.random(n) < base_p
+
+    avail = {
+        "three_ds": missing_mask(0.95),
+        "avs": missing_mask(0.93),
+        "cvv": missing_mask(0.93),
+        "device_match": missing_mask(0.85),
+        "ip_match": missing_mask(0.85),
+        "delivery_confirmed": rng.random(n) < np.select([is_strong, is_weak, is_ambiguous], [0.85, 0.45, 0.65], default=0.65),
+        "tracking_available": rng.random(n) < np.select([is_strong, is_weak, is_ambiguous], [0.80, 0.35, 0.58], default=0.58),
+        "delivery_address_match": rng.random(n) < np.select([is_strong, is_weak, is_ambiguous], [0.82, 0.40, 0.60], default=0.60),
+        "delivery_timestamp": rng.random(n) < np.select([is_strong, is_weak, is_ambiguous], [0.80, 0.35, 0.58], default=0.58),
+        "proof_of_delivery": rng.random(n) < np.select([is_strong, is_weak, is_ambiguous], [0.65, 0.20, 0.42], default=0.42),
+        "prior_order_history": missing_mask(0.97),
+        "prior_successful_orders": missing_mask(0.97),
+        "prior_disputes": missing_mask(0.97),
+        "customer_communication_available": missing_mask(0.90),
+        "cancellation_request": missing_mask(0.90),
+        "refund_request": missing_mask(0.90),
+    }
+
+    # ---- latent probability model ---------------------------------------------
+    def relevance_weight_array(evidence_type: str) -> np.ndarray:
+        return np.array([RELEVANCE_WEIGHT[RELEVANCE_MAP[rc][evidence_type]] for rc in reason_code])
+
+    auth_signal = (
+        three_ds_authenticated.astype(float) * relevance_weight_array("three_ds")
+        + avs_hit.astype(float) * relevance_weight_array("avs")
+        + cvv_hit.astype(float) * relevance_weight_array("cvv")
+        + device_match.astype(float) * relevance_weight_array("device_match")
+        + ip_match.astype(float) * relevance_weight_array("ip_match")
+    )
+    auth_weight_sum = sum(relevance_weight_array(t) for t in AUTH_EVIDENCE)
+    auth_component = auth_signal / np.clip(auth_weight_sum, 1e-6, None)
+
+    fulfillment_signal = (
+        delivery_confirmed.astype(float) * relevance_weight_array("delivery_confirmed")
+        + tracking_available.astype(float) * relevance_weight_array("tracking_available")
+        + delivery_address_match_evd.astype(float) * relevance_weight_array("delivery_address_match")
+        + proof_of_delivery.astype(float) * relevance_weight_array("proof_of_delivery")
+    )
+    fulfillment_weight_sum = sum(
+        relevance_weight_array(t) for t in ["delivery_confirmed", "tracking_available", "delivery_address_match", "proof_of_delivery"]
+    )
+    fulfillment_component = fulfillment_signal / np.clip(fulfillment_weight_sum, 1e-6, None)
+
+    prev_orders = cust["previous_order_count"].to_numpy().astype(float)
+    prev_success = cust["previous_successful_order_count"].to_numpy().astype(float)
+    prev_disputes = cust["previous_dispute_count"].to_numpy().astype(float)
+    success_ratio = np.divide(prev_success, np.clip(prev_orders, 1, None))
+    customer_component = np.clip(success_ratio - 0.12 * np.log1p(prev_disputes), 0, 1)
+
+    evidence_available_frac = np.mean(
+        np.vstack([avail[t].astype(float) for t in ALL_EVIDENCE_TYPES]), axis=0
+    )
+
+    reason_baseline = np.select(
+        [reason_code == "unauthorized_transaction", reason_code == "goods_not_received", reason_code == "duplicate_charge"],
+        [-0.15, 0.05, 0.20],
+    )
+
+    amount_z = (np.log(amount) - np.log(amount).mean()) / np.log(amount).std()
+    amount_component = 0.10 * np.clip(amount_z, -2, 2)
+
+    comms_component = 0.30 * customer_comms.astype(float) - 0.45 * cancellation_request.astype(float) - 0.25 * refund_request.astype(float)
+
+    noise = rng.normal(0, 0.95, n)
+
+    logit = (
+        -2.85
+        + 3.4 * auth_component
+        + 3.4 * fulfillment_component
+        + 1.2 * customer_component
+        + 0.20 * evidence_available_frac
+        + reason_baseline
+        + amount_component
+        + comms_component
+        + noise
+    )
+    p = np.clip(sigmoid(logit), 0.02, 0.98)
+    favorable_outcome = rng.random(n) < p
+
+    outcome_at = [d + timedelta(days=int(w)) for d, w in zip(dispute_created_at, rng.integers(5, 40, n))]
+    outcome_source = np.full(n, "synthetic_historical")
+    recovery_amount = np.where(favorable_outcome, dispute_amount, np.nan)
+
+    dispute_id = np.array([f"DSP-{i:06d}" for i in range(1, n + 1)])
+    transaction_id = np.array([f"TXN-{i:06d}" for i in range(1, n + 1)])
+
+    customers_out = cust[
+        [
+            "customer_id",
+            "account_created_at",
+            "country",
+            "account_age_days",
+            "previous_order_count",
+            "previous_successful_order_count",
+            "previous_dispute_count",
+            "previous_refund_count",
+        ]
+    ].copy()
+    customers_out["split"] = split
+    # A customer can be reused across multiple cases (repeat disputes / repeat
+    # legitimate orders) -- keep one row per customer_id, not one per case.
+    customers_out = customers_out.drop_duplicates(subset="customer_id").reset_index(drop=True)
+
+    transactions_out = pd.DataFrame(
+        {
+            "transaction_id": transaction_id,
+            "customer_id": cust["customer_id"].to_numpy(),
+            "merchant_id": merchant_id,
+            "amount": amount,
+            "currency": "INR",
+            "payment_method": payment_method,
+            "created_at": created_at,
+            "captured_at": captured_at,
+            "status": txn_status,
+            "device_id": device_id,
+            "ip_address": ip_address,
+            "billing_address_id": billing_address_id,
+            "shipping_address_id": shipping_address_id,
+            "avs_result": avs_result,
+            "cvv_result": cvv_result,
+            "three_ds_authenticated": three_ds_authenticated,
+            "split": split,
+        }
+    )
+
+    disputes_out = pd.DataFrame(
+        {
+            "dispute_id": dispute_id,
+            "transaction_id": transaction_id,
+            "reason_code": reason_code,
+            "dispute_amount": dispute_amount,
+            "created_at": dispute_created_at,
+            "response_deadline": response_deadline,
+            "status": dispute_status,
+            "scenario_archetype": archetypes,
+            "split": split,
+        }
+    )
+
+    outcomes_out = pd.DataFrame(
+        {
+            "dispute_id": dispute_id,
+            "favorable_outcome": favorable_outcome,
+            "outcome_at": outcome_at,
+            "outcome_source": outcome_source,
+            "recovery_amount": recovery_amount,
+            "split": split,
+        }
+    )
+
+    # ---- evidence rows (16 per case) -------------------------------------------
+    evd_value = {
+        "three_ds": [{"authenticated": bool(v)} for v in three_ds_authenticated],
+        "avs": [{"result": v} for v in avs_result],
+        "cvv": [{"result": v} for v in cvv_result],
+        "device_match": [{"match": bool(v)} for v in device_match],
+        "ip_match": [{"match": bool(v)} for v in ip_match],
+        "delivery_confirmed": [{"confirmed": bool(v)} for v in delivery_confirmed],
+        "tracking_available": [{"available": bool(v)} for v in tracking_available],
+        "delivery_address_match": [{"match": bool(v)} for v in delivery_address_match_evd],
+        "delivery_timestamp": [
+            {"timestamp": (c + timedelta(days=int(x))).isoformat()}
+            for c, x in zip(captured_at, rng.integers(1, 20, n))
+        ],
+        "proof_of_delivery": [{"present": bool(v)} for v in proof_of_delivery],
+        "prior_order_history": [{"order_count": int(v)} for v in prev_orders],
+        "prior_successful_orders": [{"count": int(v)} for v in prev_success],
+        "prior_disputes": [{"count": int(v)} for v in prev_disputes],
+        "customer_communication_available": [{"present": bool(v)} for v in customer_comms],
+        "cancellation_request": [{"requested": bool(v)} for v in cancellation_request],
+        "refund_request": [{"requested": bool(v)} for v in refund_request],
+    }
+    evd_positive = {
+        "three_ds": three_ds_authenticated,
+        "avs": avs_hit,
+        "cvv": cvv_hit,
+        "device_match": device_match,
+        "ip_match": ip_match,
+        "delivery_confirmed": delivery_confirmed,
+        "tracking_available": tracking_available,
+        "delivery_address_match": delivery_address_match_evd,
+        "delivery_timestamp": delivery_confirmed,
+        "proof_of_delivery": proof_of_delivery,
+        "prior_order_history": prev_orders > 0,
+        "prior_successful_orders": prev_success > 0,
+        "prior_disputes": prev_disputes == 0,
+        "customer_communication_available": customer_comms,
+        "cancellation_request": ~cancellation_request,
+        "refund_request": ~refund_request,
+    }
+
+    evidence_rows = []
+    counter = 1
+    for etype in ALL_EVIDENCE_TYPES:
+        is_avail = avail[etype]
+        positive = evd_positive[etype]
+        strength = np.where(
+            is_avail,
+            np.clip(np.where(positive, rng.uniform(0.6, 1.0, n), rng.uniform(0.0, 0.5, n)), 0, 1),
+            0.0,
+        )
+        relevance = [RELEVANCE_MAP[rc][etype] for rc in reason_code]
+        for i in range(n):
+            evidence_rows.append(
+                (
+                    f"EVD-{counter:07d}",
+                    dispute_id[i],
+                    etype,
+                    bool(is_avail[i]),
+                    json.dumps(evd_value[etype][i]) if is_avail[i] else None,
+                    relevance[i],
+                    round(float(strength[i]), 4),
+                    (dispute_created_at[i] - timedelta(days=int(rng.integers(0, 3)))).isoformat(),
+                    split[i],
+                )
+            )
+            counter += 1
+
+    evidence_out = pd.DataFrame(
+        evidence_rows,
+        columns=[
+            "evidence_id",
+            "dispute_id",
+            "evidence_type",
+            "available",
+            "value",
+            "relevance",
+            "strength",
+            "created_at",
+            "split",
+        ],
+    )
+
+    return {
+        "customers": customers_out,
+        "transactions": transactions_out,
+        "disputes": disputes_out,
+        "evidence": evidence_out,
+        "outcomes": outcomes_out,
+    }
+
+
+def write_split_csvs(tables: dict[str, pd.DataFrame], out_dir) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for split in ["train", "validation", "test"]:
+        split_dir = out_dir / split
+        split_dir.mkdir(parents=True, exist_ok=True)
+        for name, df in tables.items():
+            subset = df[df["split"] == split].drop(columns=["split"])
+            subset.to_csv(split_dir / f"{name}.csv", index=False)
+            counts[f"{split}.{name}"] = len(subset)
+    return counts
+
+
+def sha256_of_dir(directory) -> str:
+    h = hashlib.sha256()
+    for path in sorted(directory.glob("*.csv")):
+        h.update(path.name.encode())
+        h.update(path.read_bytes())
+    return h.hexdigest()
+
+
+def lock_test_set(cfg: GeneratorConfig, force: bool) -> dict:
+    test_src = GENERATED_DIR / "test"
+    if not any(test_src.glob("*.csv")):
+        raise RuntimeError("No generated test CSVs found -- run generation before locking.")
+
+    already_locked = any(LOCKED_TEST_DIR.glob("*.csv"))
+    if already_locked and not force:
+        raise RuntimeError(
+            "data/locked/test/ already contains a locked test set. "
+            "Pass --force-relock to intentionally overwrite it (this changes the eval benchmark)."
+        )
+
+    if LOCKED_TEST_DIR.exists():
+        shutil.rmtree(LOCKED_TEST_DIR)
+    LOCKED_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    for path in test_src.glob("*.csv"):
+        shutil.copy2(path, LOCKED_TEST_DIR / path.name)
+
+    checksum = sha256_of_dir(LOCKED_TEST_DIR)
+    row_counts = {}
+    for path in sorted(LOCKED_TEST_DIR.glob("*.csv")):
+        row_counts[path.stem] = sum(1 for _ in open(path)) - 1  # minus header
+
+    metadata = {
+        "dataset_version": "1.0.0",
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "generation_seed": cfg.seed,
+        "n_cases_requested": cfg.n_cases,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "row_counts": row_counts,
+        "checksum_sha256": checksum,
+    }
+    METADATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(METADATA_DIR / "locked_test_metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    return metadata
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--n-cases", type=int, default=50_000)
+    parser.add_argument("--lock", action="store_true", help="Lock the generated test split after generation")
+    parser.add_argument("--force-relock", action="store_true", help="Overwrite an existing locked test set")
+    args = parser.parse_args()
+
+    cfg = GeneratorConfig(seed=args.seed, n_cases=args.n_cases)
+    rng = np.random.default_rng(cfg.seed)
+
+    n_customers = max(1, int(cfg.n_cases / 1.4))
+    print(f"Generating {n_customers} customers and {cfg.n_cases} cases (seed={cfg.seed})...")
+
+    customers = generate_customers(rng, n_customers)
+    customers["_split"] = assign_splits(rng, n_customers, cfg.train_frac, cfg.val_frac)
+
+    tables = generate_cases(rng, cfg, customers)
+
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    counts = write_split_csvs(tables, GENERATED_DIR)
+
+    summary = {
+        "seed": cfg.seed,
+        "n_cases": cfg.n_cases,
+        "n_customers": n_customers,
+        "split_counts": {
+            split: int(tables["disputes"][tables["disputes"]["split"] == split].shape[0])
+            for split in ["train", "validation", "test"]
+        },
+        "archetype_distribution": tables["disputes"]["scenario_archetype"].value_counts(normalize=True).round(4).to_dict(),
+        "favorable_outcome_rate_overall": float(tables["outcomes"]["favorable_outcome"].mean()),
+        "favorable_outcome_rate_by_archetype": (
+            tables["disputes"][["dispute_id", "scenario_archetype"]]
+            .merge(tables["outcomes"][["dispute_id", "favorable_outcome"]], on="dispute_id")
+            .groupby("scenario_archetype")["favorable_outcome"]
+            .mean()
+            .round(4)
+            .to_dict()
+        ),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    METADATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(METADATA_DIR / "generation_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    print(json.dumps(summary, indent=2))
+
+    if args.lock:
+        metadata = lock_test_set(cfg, force=args.force_relock)
+        print("Locked test set:")
+        print(json.dumps(metadata, indent=2))
+
+
+if __name__ == "__main__":
+    main()

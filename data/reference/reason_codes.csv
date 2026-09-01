@@ -1,0 +1,4 @@
+reason_code_id,reason_code_name,description,category,network_examples,source_id
+unauthorized_transaction,Unauthorized / Fraudulent Transaction,"Cardholder claims they did not authorize or participate in the transaction (e.g. stolen/counterfeit card, account takeover, card-not-present fraud).",fraud,"Visa 10.3 / 10.4; Mastercard 4837; Amex F29 / F31",stripe_dispute_reason_codes_2026
+goods_not_received,Goods or Services Not Received,"Cardholder claims the purchased merchandise or service was not received by the expected date, or was unavailable for pickup.",fulfillment,"Visa 13.1; Mastercard 4855; Amex C08",stripe_dispute_reason_codes_2026
+duplicate_charge,Duplicate Transaction,"Cardholder claims a single transaction was charged more than once, using the same payment credential, for the same amount, on the same date.",processing_error,"Visa 12.6.1; Mastercard 4834; Amex P08",stripe_dispute_reason_codes_2026

@@ -1,0 +1,18 @@
+[
+  {
+    "source_id": "stripe_dispute_reason_codes_2026",
+    "source_name": "Stripe Documentation — Dispute reason codes (Visa, Mastercard, American Express category mapping and evidence guidance)",
+    "source_url": "https://docs.stripe.com/disputes/reason-codes-defense-requirements",
+    "source_type": "payment_processor_documentation",
+    "license": "Publicly accessible vendor documentation (Stripe, Inc.). No explicit open-data/reuse license identified on the page. Content below is paraphrased/summarized for internal domain-reference purposes -- it is not a verbatim reproduction of Stripe's copyrighted text.",
+    "retrieved_at": "2026-09-02"
+  },
+  {
+    "source_id": "visa_verifi_compelling_evidence",
+    "source_name": "Verifi (a Visa solution) — \"What should I know about Visa's recent Compelling Evidence process?\"",
+    "source_url": "https://www.verifi.com/chargebacks-disputes-faq/what-should-i-know-about-visas-recent-compelling-evidence-process.html",
+    "source_type": "payment_network_documentation",
+    "license": "Publicly accessible vendor/network FAQ (Verifi, a Visa solution). No explicit open-data/reuse license identified on the page. Content below is paraphrased/summarized for internal domain-reference purposes -- it is not a verbatim reproduction of Verifi/Visa's copyrighted text.",
+    "retrieved_at": "2026-09-02"
+  }
+]

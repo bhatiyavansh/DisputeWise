@@ -1,0 +1,61 @@
+{
+  "manifest_version": "1.0.0",
+  "updated_at": "2026-09-02",
+  "note": "Machine-readable index of every dataset category in this repo. See docs/data_strategy.md for the rationale behind the split, and docs/external_data.md for the external-dataset investigation. SYNTHETIC is the only category used for model training/evaluation.",
+  "datasets": {
+    "synthetic": {
+      "dataset_name": "disputewise_synthetic_v1",
+      "dataset_version": "1.0.0",
+      "purpose": "primary_ml_dataset",
+      "seed": 42,
+      "row_count": 50000,
+      "split_strategy": "customer_level_70_15_15",
+      "train_count": 35115,
+      "validation_count": 7439,
+      "test_count": 7446,
+      "locked_test_checksum_sha256": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+      "locked_test_metadata_path": "data/metadata/locked_test_metadata.json",
+      "generator_script": "scripts/generate_dataset.py",
+      "generated_paths": ["data/generated/train/", "data/generated/validation/", "data/generated/test/"],
+      "locked_path": "data/locked/test/",
+      "notes": "Outcomes are sampled from a latent logistic probability model, not deterministic rules. Unchanged by the Phase 1 data-strategy upgrade."
+    },
+    "reference": [
+      {
+        "dataset_name": "disputewise_reference_reason_codes",
+        "source": "stripe_dispute_reason_codes_2026",
+        "path": "data/reference/reason_codes.csv",
+        "row_count": 3,
+        "purpose": "domain_reference",
+        "license": "Publicly accessible vendor documentation (Stripe, Inc.); no explicit open-data license identified; content paraphrased, not redistributed verbatim. See data/reference/sources.json.",
+        "retrieval_date": "2026-09-02"
+      },
+      {
+        "dataset_name": "disputewise_reference_evidence_requirements",
+        "source": "stripe_dispute_reason_codes_2026; visa_verifi_compelling_evidence",
+        "path": "data/reference/evidence_requirements.csv",
+        "row_count": 48,
+        "purpose": "domain_reference",
+        "license": "Publicly accessible vendor/network documentation; no explicit open-data license identified; content paraphrased, not redistributed verbatim. See data/reference/sources.json.",
+        "retrieval_date": "2026-09-02"
+      },
+      {
+        "dataset_name": "disputewise_reference_sources",
+        "source": "self-describing provenance registry",
+        "path": "data/reference/sources.json",
+        "row_count": 2,
+        "purpose": "domain_reference",
+        "license": "n/a (provenance metadata, not content)",
+        "retrieval_date": "2026-09-02"
+      }
+    ],
+    "external": {
+      "dataset_name": null,
+      "source": null,
+      "purpose": "external_benchmark_only",
+      "status": "not_added",
+      "license": null,
+      "notes": "No suitable public dataset with case-level dispute-CONTEST-outcome labels (matching our favorable_outcome target semantics) was found with legally clear reuse rights. See docs/external_data.md for the full investigation, datasets considered, and why each was rejected. data/external/ exists but is empty apart from a README explaining this state."
+    }
+  }
+}

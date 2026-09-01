@@ -1,0 +1,15 @@
+{
+  "dataset_version": "1.0.0",
+  "schema_version": "1.0.0",
+  "generation_seed": 42,
+  "n_cases_requested": 50000,
+  "created_at": "2026-09-01T18:53:19.351232+00:00",
+  "row_counts": {
+    "customers": 3544,
+    "disputes": 7446,
+    "evidence": 119136,
+    "outcomes": 7446,
+    "transactions": 7446
+  },
+  "checksum_sha256": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c"
+}

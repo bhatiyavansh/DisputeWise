@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+.env
+
+# Generated (reproducible) dataset artifacts -- not committed.
+# The locked test set IS committed (it's the frozen benchmark); see data/locked/test/.
+data/generated/
+data/raw/
+
+.DS_Store
+*.egg-info/
