@@ -114,7 +114,7 @@ Evidence relevance is reason-code-aware (e.g. 3DS/AVS/CVV matter for `unauthoriz
 | GET | `/cases/{case_id}` | implemented (dispute + transaction + customer) |
 | GET | `/cases/{case_id}/evidence` | implemented |
 | POST | `/cases/{case_id}/score` | **implemented (Phase 2)** — calibrated winnability + SHAP factors |
-| POST | `/cases/{case_id}/decision` | **501** stub — Phase 3 |
+| POST | `/cases/{case_id}/decision` | **implemented (Phase 3)** — cost-sensitive CONTEST / HUMAN_REVIEW / DO_NOT_CONTEST |
 | POST | `/cases/{case_id}/draft` | **501** stub — Phase 4 |
 
 ## Running tests
@@ -201,6 +201,57 @@ To rebuild every artifact from scratch: `make train` (then `make evaluate evalua
 
 Detailed technical notes — feature groups, the layered leakage defenses, calibration method selection, error analysis, and an honest limitations list — are in [docs/phase2.md](docs/phase2.md).
 
+## Phase 3 — cost-sensitive decision engine
+
+Phase 3 adds `POST /cases/{id}/decision`: it takes Phase 2's calibrated probability and asks whether contesting is economically worth it. Returns **CONTEST**, **HUMAN_REVIEW**, or **DO_NOT_CONTEST** with a full, auditable expected-value breakdown. **Decision support only — no dispute is ever submitted, contested, or acted on automatically.**
+
+| | |
+|---|---|
+| Decision policy version | `decision-v1` |
+| Primary signal | expected net value (`P(win) × recoverable_amount − contest_cost`), gated by model confidence |
+| Cost defaults | `contest_cost=₹300`, `recovery_rate=1.0` — **prototype assumptions, not verified Razorpay economics** (see docs/phase3.md) |
+| Evidence-aware routing | a CONTEST recommendation is downgraded to HUMAN_REVIEW if high-relevance evidence for the reason code is missing on file |
+| Config overrides | any field, via `DISPUTEWISE_<FIELD>` env vars (e.g. `DISPUTEWISE_CONTEST_COST=450`) |
+
+### Canonical commands
+
+```bash
+# Decision policy on validation, vs. three baselines (contest-everything /
+# probability-threshold / evidence-completeness) -- policy is NOT tuned on test
+python scripts/evaluate_decisions.py
+
+# OFFICIAL final decision evaluation on the locked test set (read-only, checksum-guarded)
+python scripts/evaluate_locked_decisions.py
+```
+
+Inside Docker: `docker compose run --rm backend python /scripts/...`, or `make evaluate-decisions`, `make evaluate-locked-decisions`, `make decision-all`.
+
+### Results (locked test, n=7,446)
+
+| Bucket | Volume | Actual favorable-outcome rate |
+|---|---|---|
+| CONTEST | 27.2% (n=2,027) | **91.2%** |
+| HUMAN_REVIEW | 50.6% (n=3,765) | 66.2% |
+| DO_NOT_CONTEST | 22.2% (n=1,654) | 16.6% |
+
+Bucket sizes and rates closely match validation (26.3% / 90.7%, 50.8% / 66.2%, 22.9% / 16.9%) — the policy is not overfit. The policy correctly separates cases by actual outcome, and honestly routes ambiguous ones (economics and/or confidence unclear) to a human instead of guessing.
+
+**One honest finding worth surfacing rather than hiding:** under the default (tiny) `contest_cost`, a naive "contest everything" baseline captures *more* total realized value than our confidence-gated policy on this dataset — because almost every case clears the economic bar, so our policy's `high_confidence_probability=0.65` threshold, not the economics, is what's actually limiting CONTEST volume. This is reported as-is in [docs/phase3.md](docs/phase3.md) rather than adjusted after the fact to look better; it's a real, actionable signal about which threshold to tune once real operational cost data exists.
+
+Full economic-assumption transparency (what's observed data vs. model output vs. prototype assumption), the policy's exact threshold logic, break-even/sensitivity analysis, and the full baseline comparison are in [docs/phase3.md](docs/phase3.md).
+
+## Frontend — Risk Command Center
+
+A React + TypeScript + Vite + Tailwind merchant-facing console (`frontend/`) covering the Dispute Inbox and Case Intelligence views, wired to the real `/cases`, `/cases/{id}`, `/cases/{id}/evidence`, `/score`, and `/decision` endpoints — no backend code was modified to build it.
+
+```bash
+cd frontend
+npm install
+npm run dev   # http://localhost:5173 -- requires the backend running (see above)
+```
+
+Full setup, manual-testing walkthrough (demo case IDs per decision bucket, testing missing evidence / API failure / unknown cases), and architecture notes are in [docs/frontend.md](docs/frontend.md).
+
 ## Phase 1 exit criteria
 
 - [x] Docker Compose starts Postgres + FastAPI
@@ -228,4 +279,21 @@ Detailed technical notes — feature groups, the layered leakage defenses, calib
 - [x] `/score` returns calibrated probability, model version, and SHAP factors
 - [x] Locked-test evaluation, baseline comparison, and error analysis implemented
 
-**RAG, LLM drafting, the decision engine, and the frontend are intentionally not implemented yet.** They are Phase 3–5 scope. `POST /cases/{id}/decision` and `POST /cases/{id}/draft` remain deliberate 501 stubs. **PHASE 3 HAS NOT BEEN IMPLEMENTED.**
+**RAG, LLM drafting, and the frontend are intentionally not implemented yet.** They are Phase 4–5 scope. `POST /cases/{id}/draft` remains a deliberate 501 stub.
+
+## Phase 3 exit criteria
+
+- [x] Decision configuration implemented and validated (contest_cost, recovery_rate, thresholds; env-overridable)
+- [x] Expected recovery, expected net value, and break-even probability implemented and unit-tested
+- [x] Three-way decision policy implemented (CONTEST / HUMAN_REVIEW / DO_NOT_CONTEST), primary signal is expected net value, gated by model confidence
+- [x] HUMAN_REVIEW boundary (`review_margin`) implemented -- near-zero EV is always routed to review
+- [x] Deterministic, template-generated explanations for every decision (no LLM)
+- [x] Evidence-aware routing: a documented, one-directional override (CONTEST → HUMAN_REVIEW only) when high-relevance evidence is missing
+- [x] Sensitivity analysis + break-even probability exposed as an explainability surface (never changes the decision)
+- [x] `POST /cases/{id}/decision` implemented, with `model_version` / `feature_schema_version` / `decision_policy_version` on every response
+- [x] Validation decision evaluation + baseline comparison (contest-everything / probability-threshold / evidence-completeness) implemented, reported honestly
+- [x] Official locked-test decision evaluation implemented (checksum-guarded before and after; policy never tuned on test)
+- [x] Phase 1 locked test set remains byte-identical (checksum `e1e8cd50…93b5c`)
+- [x] All Phase 1 + Phase 2 tests still pass
+
+**RAG, embeddings, a vector database, LLM drafting, automatic submission, customer notifications, and the frontend are intentionally not implemented.** They are Phase 4–5 scope. **PHASE 4 HAS NOT BEEN IMPLEMENTED.**

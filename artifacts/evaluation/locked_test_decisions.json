@@ -1,0 +1,72 @@
+{
+  "evaluation_type": "official_locked_test_decisions",
+  "evaluated_at": "2026-09-02T09:25:07.020237+00:00",
+  "model_version": "risk-v1",
+  "decision_policy_version": "decision-v1",
+  "decision_config": {
+    "contest_cost": 300.0,
+    "recovery_rate": 1.0,
+    "min_expected_net_value": 0.0,
+    "review_margin": 50.0,
+    "high_confidence_probability": 0.65,
+    "low_confidence_probability": 0.35,
+    "require_high_relevance_evidence_for_contest": true,
+    "sensitivity_deltas": [
+      -0.1,
+      -0.05,
+      0.0,
+      0.05,
+      0.1
+    ]
+  },
+  "locked_test_checksum_before": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+  "locked_test_checksum_after": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+  "locked_test_checksum_recorded": "e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c",
+  "report": {
+    "policy": "DisputeWise decision-v1 (LOCKED TEST -- final)",
+    "n_total": 7446,
+    "buckets": {
+      "CONTEST": {
+        "count": 2027,
+        "percentage": 27.22,
+        "actual_favorable_outcome_rate": 0.9122,
+        "expected_recovery_total": 6474274.11,
+        "expected_net_value_total": 5866174.11,
+        "realized_recovery_total": 6568859.85,
+        "estimated_contest_cost_total": 608100.0,
+        "realized_net_value_total": 5960759.85,
+        "evidence_gap_downgrades": 0
+      },
+      "HUMAN_REVIEW": {
+        "count": 3765,
+        "percentage": 50.56,
+        "actual_favorable_outcome_rate": 0.6624,
+        "expected_recovery_total": 6272971.55,
+        "expected_net_value_total": 5143471.55,
+        "realized_recovery_total": 6400378.69,
+        "estimated_contest_cost_total": 0.0,
+        "realized_net_value_total": 6400378.69,
+        "evidence_gap_downgrades": 1710
+      },
+      "DO_NOT_CONTEST": {
+        "count": 1654,
+        "percentage": 22.21,
+        "actual_favorable_outcome_rate": 0.1657,
+        "expected_recovery_total": 198045.64,
+        "expected_net_value_total": -298154.36,
+        "realized_recovery_total": 209266.58,
+        "estimated_contest_cost_total": 0.0,
+        "realized_net_value_total": 209266.58,
+        "evidence_gap_downgrades": 0
+      }
+    },
+    "portfolio": {
+      "total_expected_net_value": 10711491.3,
+      "contest_only_expected_net_value": 5866174.11,
+      "contest_only_realized_net_value": 5960759.85,
+      "contest_volume": 2027,
+      "review_volume": 3765,
+      "do_not_contest_volume": 1654
+    }
+  }
+}

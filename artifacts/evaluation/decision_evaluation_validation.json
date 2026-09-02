@@ -1,0 +1,210 @@
+{
+  "evaluated_at": "2026-09-02T09:24:57.152133+00:00",
+  "split": "validation",
+  "decision_config": {
+    "contest_cost": 300.0,
+    "recovery_rate": 1.0,
+    "min_expected_net_value": 0.0,
+    "review_margin": 50.0,
+    "high_confidence_probability": 0.65,
+    "low_confidence_probability": 0.35,
+    "require_high_relevance_evidence_for_contest": true,
+    "sensitivity_deltas": [
+      -0.1,
+      -0.05,
+      0.0,
+      0.05,
+      0.1
+    ]
+  },
+  "phase3_policy": {
+    "policy": "DisputeWise decision-v1 (validation)",
+    "n_total": 7439,
+    "buckets": {
+      "CONTEST": {
+        "count": 1959,
+        "percentage": 26.33,
+        "actual_favorable_outcome_rate": 0.9066,
+        "expected_recovery_total": 5964627.06,
+        "expected_net_value_total": 5376927.06,
+        "realized_recovery_total": 5987755.21,
+        "estimated_contest_cost_total": 587700.0,
+        "realized_net_value_total": 5400055.21,
+        "evidence_gap_downgrades": 0
+      },
+      "HUMAN_REVIEW": {
+        "count": 3776,
+        "percentage": 50.76,
+        "actual_favorable_outcome_rate": 0.6621,
+        "expected_recovery_total": 6227359.87,
+        "expected_net_value_total": 5094559.87,
+        "realized_recovery_total": 6357159.89,
+        "estimated_contest_cost_total": 0.0,
+        "realized_net_value_total": 6357159.89,
+        "evidence_gap_downgrades": 1745
+      },
+      "DO_NOT_CONTEST": {
+        "count": 1704,
+        "percentage": 22.91,
+        "actual_favorable_outcome_rate": 0.169,
+        "expected_recovery_total": 208161.79,
+        "expected_net_value_total": -303038.21,
+        "realized_recovery_total": 233848.04,
+        "estimated_contest_cost_total": 0.0,
+        "realized_net_value_total": 233848.04,
+        "evidence_gap_downgrades": 0
+      }
+    },
+    "portfolio": {
+      "total_expected_net_value": 10168448.72,
+      "contest_only_expected_net_value": 5376927.06,
+      "contest_only_realized_net_value": 5400055.21,
+      "contest_volume": 1959,
+      "review_volume": 3776,
+      "do_not_contest_volume": 1704
+    }
+  },
+  "baselines": {
+    "A_contest_everything": {
+      "policy": "Baseline A: contest everything",
+      "n_total": 7439,
+      "buckets": {
+        "CONTEST": {
+          "count": 7439,
+          "percentage": 100.0,
+          "actual_favorable_outcome_rate": 0.6135,
+          "expected_recovery_total": 12400148.66,
+          "expected_net_value_total": 10168448.66,
+          "realized_recovery_total": 12578763.14,
+          "estimated_contest_cost_total": 2231700.0,
+          "realized_net_value_total": 10347063.14,
+          "evidence_gap_downgrades": 0
+        },
+        "HUMAN_REVIEW": {
+          "count": 0,
+          "percentage": 0.0,
+          "actual_favorable_outcome_rate": null,
+          "expected_recovery_total": 0.0,
+          "expected_net_value_total": 0.0,
+          "realized_recovery_total": 0.0,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 0.0,
+          "evidence_gap_downgrades": 0
+        },
+        "DO_NOT_CONTEST": {
+          "count": 0,
+          "percentage": 0.0,
+          "actual_favorable_outcome_rate": null,
+          "expected_recovery_total": 0.0,
+          "expected_net_value_total": 0.0,
+          "realized_recovery_total": 0.0,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 0.0,
+          "evidence_gap_downgrades": 0
+        }
+      },
+      "portfolio": {
+        "total_expected_net_value": 10168448.66,
+        "contest_only_expected_net_value": 10168448.66,
+        "contest_only_realized_net_value": 10347063.14,
+        "contest_volume": 7439,
+        "review_volume": 0,
+        "do_not_contest_volume": 0
+      }
+    },
+    "B_probability_threshold": {
+      "policy": "Baseline B: contest if P(win) >= 0.50",
+      "n_total": 7439,
+      "buckets": {
+        "CONTEST": {
+          "count": 4433,
+          "percentage": 59.59,
+          "actual_favorable_outcome_rate": 0.8723,
+          "expected_recovery_total": 11205843.26,
+          "expected_net_value_total": 9875943.26,
+          "realized_recovery_total": 11205259.72,
+          "estimated_contest_cost_total": 1329900.0,
+          "realized_net_value_total": 9875359.72,
+          "evidence_gap_downgrades": 0
+        },
+        "HUMAN_REVIEW": {
+          "count": 0,
+          "percentage": 0.0,
+          "actual_favorable_outcome_rate": null,
+          "expected_recovery_total": 0.0,
+          "expected_net_value_total": 0.0,
+          "realized_recovery_total": 0.0,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 0.0,
+          "evidence_gap_downgrades": 0
+        },
+        "DO_NOT_CONTEST": {
+          "count": 3006,
+          "percentage": 40.41,
+          "actual_favorable_outcome_rate": 0.2319,
+          "expected_recovery_total": 1194305.4,
+          "expected_net_value_total": 292505.4,
+          "realized_recovery_total": 1373503.42,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 1373503.42,
+          "evidence_gap_downgrades": 0
+        }
+      },
+      "portfolio": {
+        "total_expected_net_value": 10168448.66,
+        "contest_only_expected_net_value": 9875943.26,
+        "contest_only_realized_net_value": 9875359.72,
+        "contest_volume": 4433,
+        "review_volume": 0,
+        "do_not_contest_volume": 3006
+      }
+    },
+    "C_evidence_completeness": {
+      "policy": "Baseline C: contest if high-relevance evidence completeness >= 0.70",
+      "n_total": 7439,
+      "buckets": {
+        "CONTEST": {
+          "count": 5434,
+          "percentage": 73.05,
+          "actual_favorable_outcome_rate": 0.6432,
+          "expected_recovery_total": 9861998.7,
+          "expected_net_value_total": 8231798.7,
+          "realized_recovery_total": 10099673.96,
+          "estimated_contest_cost_total": 1630200.0,
+          "realized_net_value_total": 8469473.96,
+          "evidence_gap_downgrades": 0
+        },
+        "HUMAN_REVIEW": {
+          "count": 0,
+          "percentage": 0.0,
+          "actual_favorable_outcome_rate": null,
+          "expected_recovery_total": 0.0,
+          "expected_net_value_total": 0.0,
+          "realized_recovery_total": 0.0,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 0.0,
+          "evidence_gap_downgrades": 0
+        },
+        "DO_NOT_CONTEST": {
+          "count": 2005,
+          "percentage": 26.95,
+          "actual_favorable_outcome_rate": 0.5332,
+          "expected_recovery_total": 2538149.96,
+          "expected_net_value_total": 1936649.96,
+          "realized_recovery_total": 2479089.18,
+          "estimated_contest_cost_total": 0.0,
+          "realized_net_value_total": 2479089.18,
+          "evidence_gap_downgrades": 0
+        }
+      },
+      "portfolio": {
+        "total_expected_net_value": 10168448.66,
+        "contest_only_expected_net_value": 8231798.7,
+        "contest_only_realized_net_value": 8469473.96,
+        "contest_volume": 5434,
+        "review_volume": 0,
+        "do_not_contest_volume": 2005
+      }
+    }
+  }
+}

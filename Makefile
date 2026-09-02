@@ -1,5 +1,6 @@
 .PHONY: up down build logs generate lock load load-all verify verify-reference test shell \
-        audit train evaluate evaluate-calibration evaluate-locked-test error-analysis model-all
+        audit train evaluate evaluate-calibration evaluate-locked-test error-analysis model-all \
+        evaluate-decisions evaluate-locked-decisions decision-all
 
 up:
 	docker compose up -d --build
@@ -70,3 +71,17 @@ error-analysis:
 
 # Full Phase 2 pipeline, in order.
 model-all: audit train evaluate evaluate-calibration error-analysis evaluate-locked-test
+
+# ---------------------------------------------------------------------------
+# Phase 3 -- cost-sensitive decision engine
+# ---------------------------------------------------------------------------
+
+# Decision policy on validation, vs. baselines. Policy is NOT tuned on test.
+evaluate-decisions:
+	docker compose run --rm backend python /scripts/evaluate_decisions.py
+
+# OFFICIAL final decision evaluation. Read-only; verifies the locked checksum before and after.
+evaluate-locked-decisions:
+	docker compose run --rm backend python /scripts/evaluate_locked_decisions.py
+
+decision-all: evaluate-decisions evaluate-locked-decisions

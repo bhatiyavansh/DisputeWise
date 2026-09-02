@@ -127,9 +127,14 @@ def test_score_handles_case_with_sparse_evidence(client, db_session, risk_model)
 # --- Phase 1 endpoints must be unaffected ----------------------------------
 
 
-def test_decision_endpoint_still_stubbed(client, db_session):
+def test_decision_endpoint_now_implemented_by_phase_3(client, db_session):
+    """Written in Phase 2 to guard that /decision was still a stub; Phase 3
+    implements it (see tests/test_decision_api.py for full coverage), so this
+    assertion is now inverted rather than deleted -- same pattern as
+    test_score_endpoint_is_implemented_in_phase_2 in tests/test_cases.py.
+    """
     make_case(db_session, dispute_id="DSP-000001")
-    assert client.post("/cases/DSP-000001/decision").status_code == 501
+    assert client.post("/cases/DSP-000001/decision").status_code != 501
 
 
 def test_draft_endpoint_still_stubbed(client, db_session):
