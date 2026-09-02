@@ -1,0 +1,251 @@
+{
+  "evaluated_at": "2026-09-02T13:44:01.858102+00:00",
+  "n_cases": 8,
+  "knowledge_base_version": "knowledge-v1",
+  "verifier_version": "verifier-v1",
+  "response_schema_version": "response-v1",
+  "note": "This is a hand-constructed, deterministic benchmark (8 synthetic cases), NOT the locked test set and NOT training/validation data. It exists because exact grounding labels for real disputes don't exist -- see docs/phase4.md for the full rationale.",
+  "evidence_gap": {
+    "critical_gap_detection_accuracy": 1.0,
+    "cases_with_expected_gap": 5
+  },
+  "retrieval": {
+    "reason_code_relevance": 1.0,
+    "total_reason_code_leaks": 0,
+    "required_guidance_hit_rate": 1.0
+  },
+  "grounding": {
+    "n_claims": 9,
+    "claim_status_counts": {
+      "SUPPORTED": 5,
+      "PARTIALLY_SUPPORTED": 1,
+      "UNSUPPORTED": 2,
+      "INVALID_REFERENCE": 1
+    },
+    "supported_rate": 0.5556,
+    "unsupported_rate": 0.2222,
+    "invalid_reference_rate": 0.1111,
+    "partially_supported_rate": 0.1111,
+    "blocked_response_rate": 0.375,
+    "blocked_prediction_accuracy": 1.0
+  },
+  "cases": [
+    {
+      "name": "complete_strong_evidence",
+      "reason_code": "goods_not_received",
+      "gap": {
+        "required": 8,
+        "available": 8,
+        "missing": 0,
+        "coverage_ratio": 1.0,
+        "has_critical_gap": false,
+        "expected_missing_critical": false,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": null
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "SUPPORTED",
+          "C2": "SUPPORTED"
+        },
+        "response_state": "DRAFT_READY",
+        "response_state_reason": "All material claims are supported by this case's evidence and/or retrieved guidance.",
+        "expected_blocked": false,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "missing_critical_evidence",
+      "reason_code": "goods_not_received",
+      "gap": {
+        "required": 8,
+        "available": 7,
+        "missing": 1,
+        "coverage_ratio": 0.875,
+        "has_critical_gap": true,
+        "expected_missing_critical": true,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": true
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "SUPPORTED"
+        },
+        "response_state": "DRAFT_READY",
+        "response_state_reason": "All material claims are supported by this case's evidence and/or retrieved guidance.",
+        "expected_blocked": false,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "contradictory_evidence",
+      "reason_code": "goods_not_received",
+      "gap": {
+        "required": 8,
+        "available": 8,
+        "missing": 0,
+        "coverage_ratio": 1.0,
+        "has_critical_gap": false,
+        "expected_missing_critical": false,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": null
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "UNSUPPORTED"
+        },
+        "response_state": "DRAFT_BLOCKED",
+        "response_state_reason": "Response contains 1 unsupported or invalidly-referenced material claim(s) (C1). Human review required before any of this draft can be used.",
+        "expected_blocked": true,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "weak_evidence",
+      "reason_code": "goods_not_received",
+      "gap": {
+        "required": 8,
+        "available": 1,
+        "missing": 7,
+        "coverage_ratio": 0.125,
+        "has_critical_gap": true,
+        "expected_missing_critical": true,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": true
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "PARTIALLY_SUPPORTED"
+        },
+        "response_state": "DRAFT_FLAGGED",
+        "response_state_reason": "1 claim(s) (C1) are only partially supported (weak evidence) -- recommend human review before use.",
+        "expected_blocked": false,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "unsupported_claim_opportunity",
+      "reason_code": "unauthorized_transaction",
+      "gap": {
+        "required": 9,
+        "available": 1,
+        "missing": 8,
+        "coverage_ratio": 0.1111,
+        "has_critical_gap": true,
+        "expected_missing_critical": true,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": true
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "UNSUPPORTED"
+        },
+        "response_state": "DRAFT_BLOCKED",
+        "response_state_reason": "Response contains 1 unsupported or invalidly-referenced material claim(s) (C1). Human review required before any of this draft can be used.",
+        "expected_blocked": true,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "unknown_missing_field",
+      "reason_code": "duplicate_charge",
+      "gap": {
+        "required": 5,
+        "available": 1,
+        "missing": 4,
+        "coverage_ratio": 0.2,
+        "has_critical_gap": true,
+        "expected_missing_critical": true,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": true
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "INVALID_REFERENCE"
+        },
+        "response_state": "DRAFT_BLOCKED",
+        "response_state_reason": "Response contains 1 unsupported or invalidly-referenced material claim(s) (C1). Human review required before any of this draft can be used.",
+        "expected_blocked": true,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "reason_code_mismatch_guard",
+      "reason_code": "unauthorized_transaction",
+      "gap": {
+        "required": 9,
+        "available": 1,
+        "missing": 8,
+        "coverage_ratio": 0.1111,
+        "has_critical_gap": true,
+        "expected_missing_critical": true,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": true
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "SUPPORTED"
+        },
+        "response_state": "DRAFT_READY",
+        "response_state_reason": "All material claims are supported by this case's evidence and/or retrieved guidance.",
+        "expected_blocked": false,
+        "blocked_prediction_correct": true
+      }
+    },
+    {
+      "name": "multiple_evidence_sources",
+      "reason_code": "goods_not_received",
+      "gap": {
+        "required": 8,
+        "available": 8,
+        "missing": 0,
+        "coverage_ratio": 1.0,
+        "has_critical_gap": false,
+        "expected_missing_critical": false,
+        "gap_detection_correct": true
+      },
+      "retrieval": {
+        "n_results": 6,
+        "reason_code_leaks": 0,
+        "addresses_gap": null
+      },
+      "grounding": {
+        "claim_statuses": {
+          "C1": "SUPPORTED"
+        },
+        "response_state": "DRAFT_READY",
+        "response_state_reason": "All material claims are supported by this case's evidence and/or retrieved guidance.",
+        "expected_blocked": false,
+        "blocked_prediction_correct": true
+      }
+    }
+  ]
+}

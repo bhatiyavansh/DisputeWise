@@ -137,6 +137,8 @@ def test_decision_endpoint_now_implemented_by_phase_3(client, db_session):
     assert client.post("/cases/DSP-000001/decision").status_code != 501
 
 
-def test_draft_endpoint_still_stubbed(client, db_session):
+def test_draft_endpoint_now_implemented_by_phase_4(client, db_session):
+    """Written in Phase 2 to guard that /draft was still a stub; Phase 4
+    implements it -- same inversion pattern as the other phase boundaries."""
     make_case(db_session, dispute_id="DSP-000001")
-    assert client.post("/cases/DSP-000001/draft").status_code == 501
+    assert client.post("/cases/DSP-000001/draft").status_code != 501

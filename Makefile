@@ -1,6 +1,6 @@
 .PHONY: up down build logs generate lock load load-all verify verify-reference test shell \
         audit train evaluate evaluate-calibration evaluate-locked-test error-analysis model-all \
-        evaluate-decisions evaluate-locked-decisions decision-all
+        evaluate-decisions evaluate-locked-decisions decision-all evaluate-evidence-intel
 
 up:
 	docker compose up -d --build
@@ -85,3 +85,13 @@ evaluate-locked-decisions:
 	docker compose run --rm backend python /scripts/evaluate_locked_decisions.py
 
 decision-all: evaluate-decisions evaluate-locked-decisions
+
+# ---------------------------------------------------------------------------
+# Phase 4 -- evidence intelligence, grounded RAG, claim-level verification
+# ---------------------------------------------------------------------------
+
+# 8-case controlled benchmark: gap-detection accuracy, retrieval relevance,
+# grounding rates, blocked-response rate. Deterministic (FakeLLMProvider), no
+# API key required.
+evaluate-evidence-intel:
+	docker compose run --rm backend python /scripts/evaluate_evidence_intel.py

@@ -80,7 +80,16 @@ def test_decision_endpoint_is_implemented_in_phase_3(client, db_session):
     assert resp.status_code != 501, "/decision must no longer be a stub"
 
 
-def test_draft_endpoint_not_implemented(client, db_session):
+def test_draft_endpoint_is_implemented_in_phase_4(client, db_session):
+    """/draft was a Phase 1-3 stub; Phase 4 implements it.
+
+    Mirrors test_score_endpoint_is_implemented_in_phase_2 and
+    test_decision_endpoint_is_implemented_in_phase_3 above -- same pattern,
+    same reason: implementing the endpoint necessarily obsoletes the
+    "still a stub" assertion. Full behavior is covered by
+    tests/test_evidence_intel_api.py.
+    """
     make_case(db_session, dispute_id="DSP-000001")
     resp = client.post("/cases/DSP-000001/draft")
-    assert resp.status_code == 501
+    assert resp.status_code in (200, 503)
+    assert resp.status_code != 501, "/draft must no longer be a stub"

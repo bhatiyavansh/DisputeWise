@@ -28,6 +28,13 @@ services:
       POSTGRES_PORT: 5432
       API_DEFAULT_PAGE_SIZE: ${API_DEFAULT_PAGE_SIZE:-25}
       API_MAX_PAGE_SIZE: ${API_MAX_PAGE_SIZE:-200}
+      # Phase 4 -- all optional; unset means /draft's generation step reports
+      # GENERATION_UNAVAILABLE rather than failing. See docs/phase4.md.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      LLM_MODEL: ${LLM_MODEL:-nvidia/nemotron-3-super-120b-a12b:free}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8001:8000"
     volumes:

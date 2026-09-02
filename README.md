@@ -240,6 +240,41 @@ Bucket sizes and rates closely match validation (26.3% / 90.7%, 50.8% / 66.2%, 2
 
 Full economic-assumption transparency (what's observed data vs. model output vs. prototype assumption), the policy's exact threshold logic, break-even/sensitivity analysis, and the full baseline comparison are in [docs/phase3.md](docs/phase3.md).
 
+## Phase 4 — evidence intelligence, grounded RAG & claim-level verification
+
+Phase 4 answers: *if we're contesting, what evidence do we have, what does authoritative guidance say, and can every sentence of a generated response be traced back to real evidence?* Not a generic RAG chatbot — a case-centric pipeline where an LLM's output is never trusted until a deterministic verifier checks every claim against the case's own evidence.
+
+```
+evidence gap analyzer → evidence packet → RAG retrieval (TF-IDF over data/reference/)
+    → grounded generation (strict schema, explicit valid-ID list)
+    → claim-level verifier (deterministic) → DRAFT_READY / DRAFT_FLAGGED / DRAFT_BLOCKED
+```
+
+| | |
+|---|---|
+| New endpoints | `POST /cases/{id}/evidence-gap`, `/evidence-packet`, `/draft` (now real), `/verify` |
+| Knowledge base | `knowledge-v1` — 51 chunks, deterministically built from `data/reference/`, TF-IDF ranked (no vector DB, no embedding model) |
+| LLM provider | **OpenRouter** (free tier), `nvidia/nemotron-3-super-120b-a12b:free` — verified tool-calling-capable via OpenRouter's live model catalog, not guessed. Anthropic kept available (`LLM_PROVIDER=anthropic`) but not used for the demo. **No key configured in this environment**; `/draft` returns `GENERATION_UNAVAILABLE` (HTTP 200, decision/gap/retrieval still fully populated) rather than a 503 |
+| Safety | any `UNSUPPORTED`/`INVALID_REFERENCE` claim blocks the **entire** response — never averaged away by good claims |
+
+### Canonical commands
+
+```bash
+python scripts/evaluate_evidence_intel.py   # 8-case deterministic benchmark (no API key needed)
+```
+
+Inside Docker: `make evaluate-evidence-intel`.
+
+### Adversarial safety (mandatory demonstration)
+
+Every required hallucination scenario is a deterministic, reproducible test in `tests/test_adversarial_grounding.py`: fabricated delivery date, missing evidence cited as present, contradictory timestamps, cross-case evidence contamination, nonexistent evidence ID, guaranteed-win language, and a fabricated policy citation — every one resolves to `UNSUPPORTED` or `INVALID_REFERENCE`, and a single bad claim blocks an otherwise-good draft (`test_end_to_end_mixed_draft_is_blocked_by_a_single_bad_claim`).
+
+### Evaluation (8-case controlled benchmark)
+
+Gap-detection accuracy 100%, retrieval reason-code relevance 100%, required-guidance hit rate 100%, blocked-prediction accuracy 100% (8/8). Full numbers, the FACT/REFERENCE/INFERENCE/UNSUPPORTED distinction, exact OpenRouter setup steps, and an honest limitations section (regex-based date/guarantee checks, no live-verified provider call in this environment, no semantic/NLI layer) are in [docs/phase4.md](docs/phase4.md).
+
+**Never implemented, by design: automatic submission of anything, to anyone, ever.** Human approval remains mandatory for every draft, regardless of `response_state`.
+
 ## Frontend — Risk Command Center
 
 A React + TypeScript + Vite + Tailwind merchant-facing console (`frontend/`) covering the Dispute Inbox and Case Intelligence views, wired to the real `/cases`, `/cases/{id}`, `/cases/{id}/evidence`, `/score`, and `/decision` endpoints — no backend code was modified to build it.
@@ -296,4 +331,28 @@ Full setup, manual-testing walkthrough (demo case IDs per decision bucket, testi
 - [x] Phase 1 locked test set remains byte-identical (checksum `e1e8cd50…93b5c`)
 - [x] All Phase 1 + Phase 2 tests still pass
 
-**RAG, embeddings, a vector database, LLM drafting, automatic submission, customer notifications, and the frontend are intentionally not implemented.** They are Phase 4–5 scope. **PHASE 4 HAS NOT BEEN IMPLEMENTED.**
+**RAG, embeddings, a vector database, LLM drafting, automatic submission, customer notifications, and the frontend are intentionally not implemented here.** They followed in Phase 4 (RAG/generation/verification) and the separately-developed frontend.
+
+## Phase 4 exit criteria
+
+- [x] Evidence Gap Analyzer implemented (reason-code + case evidence + `data/reference/`, no hardcoded per-case logic)
+- [x] Evidence Packet implemented (narrow, LLM-safe; excludes raw PII and all outcome/target fields structurally)
+- [x] Reference-data provenance preserved (every gap item and knowledge chunk carries `source_id`/`source_name`/`source_url`)
+- [x] RAG knowledge base implemented (`knowledge-v1`, 51 deterministic chunks from `data/reference/`, TF-IDF ranked, no vector DB / embedding model / paid API)
+- [x] Retrieval implemented (reason-code filter before ranking; query built from the case's actual evidence gaps)
+- [x] LLM provider abstraction implemented (`LLMProvider` interface, `AnthropicLLMProvider`, `FakeLLMProvider`; app runs fully without an API key)
+- [x] Structured grounded generation implemented (forced tool-use, strict Pydantic-validated schema)
+- [x] Claim-level verifier implemented (7 deterministic checks, no LLM self-grading)
+- [x] Unsupported claims BLOCK a response (`DRAFT_BLOCKED` on any `UNSUPPORTED`/`INVALID_REFERENCE` claim — never averaged away)
+- [x] Adversarial hallucination tests implemented (every required scenario in `tests/test_adversarial_grounding.py`)
+- [x] API endpoints implemented (`evidence-gap`, `evidence-packet`, `draft`, `verify`) without breaking Phase 1-3 contracts
+- [x] Version metadata implemented (6 version strings, on every response + the trace)
+- [x] Evaluation implemented (8-case controlled benchmark, `scripts/evaluate_evidence_intel.py`)
+- [x] Full test suite passes (307/307: 179 Phase 1-3 + 128 Phase 4, incl. OpenRouter provider tests)
+- [x] Phase 1-3 tests remain green, unmodified except 3 stub-inversions following the established Phase 2/3 pattern
+- [x] Locked test checksum unchanged (`e1e8cd50…93b5c`)
+- [x] No API keys/secrets committed
+- [x] `docs/phase4.md` complete
+- [x] No automatic submission anywhere; human approval always required
+
+**RAG, embeddings, a vector database, LLM drafting, and claim-level verification are now implemented (Phase 4).** Only the frontend for these new views, and any future phases, remain outside this backend's scope.

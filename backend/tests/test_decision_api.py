@@ -123,9 +123,14 @@ def test_score_endpoint_unaffected(client, db_session, risk_model):
     assert response.status_code == 200
 
 
-def test_draft_endpoint_still_stubbed(client, db_session):
+def test_draft_endpoint_now_implemented_by_phase_4(client, db_session):
+    """Written in Phase 3 to guard that /draft was still a stub; Phase 4
+    implements it (see tests/test_evidence_intel_api.py for full coverage),
+    so this assertion is now inverted rather than deleted -- same pattern as
+    the Phase 2/3 equivalents in test_cases.py / test_score_api.py.
+    """
     make_case(db_session, dispute_id="DSP-000001")
-    assert client.post("/cases/DSP-000001/draft").status_code == 501
+    assert client.post("/cases/DSP-000001/draft").status_code != 501
 
 
 def test_health_endpoint_unaffected(client):

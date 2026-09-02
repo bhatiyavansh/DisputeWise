@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models import Customer, Dispute, Evidence, Outcome, Transaction
+from app.models.evidence import ALL_EVIDENCE_TYPES
 
 
 def make_case(
@@ -86,3 +87,38 @@ def make_case(
 
     db.commit()
     return dispute
+
+
+def add_evidence(
+    db: Session,
+    dispute: Dispute,
+    *,
+    evidence_type: str,
+    available: bool,
+    value: dict | None,
+    relevance: str,
+    strength: float,
+    evidence_id: str | None = None,
+) -> Evidence:
+    """Attach one additional evidence row to an existing dispute (from
+    make_case). Phase 4 tests need finer control over which evidence types
+    are available/missing than make_case's single default row provides.
+    """
+    now = datetime.now(timezone.utc)
+    # evidence_id is VARCHAR(32) -- some evidence_type names alone exceed that
+    # (e.g. "customer_communication_available" is 33 chars), so default IDs
+    # use a short type-index code rather than the full type name.
+    type_index = ALL_EVIDENCE_TYPES.index(evidence_type) if evidence_type in ALL_EVIDENCE_TYPES else 99
+    evidence = Evidence(
+        evidence_id=evidence_id or f"EVD-{dispute.id}-{type_index:02d}",
+        dispute_id=dispute.id,
+        evidence_type=evidence_type,
+        available=available,
+        value=value,
+        relevance=relevance,
+        strength=strength,
+        created_at=now,
+    )
+    db.add(evidence)
+    db.commit()
+    return evidence

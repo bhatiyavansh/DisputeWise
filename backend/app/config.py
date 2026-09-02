@@ -15,6 +15,25 @@ class Settings(BaseSettings):
     api_default_page_size: int = 25
     api_max_page_size: int = 200
 
+    # Phase 4 -- optional. The app must run fully (evidence gap analysis, RAG
+    # retrieval, all non-generation endpoints, and the entire test suite)
+    # with all of this unset. Never hardcode a key here or anywhere else.
+    #
+    # llm_provider selects which LLMProvider get_llm_provider() constructs
+    # (see app/evidence_intel/llm_provider.py). "openrouter" is the buildathon
+    # demo default -- a genuinely free, verified-tool-calling-capable model
+    # (see docs/phase4.md's "OpenRouter setup" section for how it was chosen
+    # and verified against OpenRouter's live /api/v1/models endpoint).
+    # "anthropic" remains supported so the architecture stays provider-agnostic,
+    # but is NOT used for the demo per product decision.
+    llm_provider: str = "openrouter"
+    llm_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+
+    openrouter_api_key: str | None = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    anthropic_api_key: str | None = None
+
     @property
     def database_url(self) -> str:
         return (

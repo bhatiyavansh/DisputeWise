@@ -12,7 +12,13 @@ pytest==8.3.4
 httpx==0.28.1
 
 # Phase 2 -- risk model (LightGBM + calibration + SHAP).
-# No deep-learning / LLM / vector-store dependencies: those are later phases.
 lightgbm==4.5.0
 scikit-learn==1.5.2
 shap==0.46.0
+
+# Phase 4 -- evidence intelligence / grounded RAG.
+# Knowledge-base retrieval reuses scikit-learn (TF-IDF) above -- no vector-DB
+# or embedding-model dependency needed for a ~51-chunk corpus. `anthropic` is
+# the only new dependency, and only used if ANTHROPIC_API_KEY is configured;
+# the app runs fully without it (see app/evidence_intel/llm_provider.py).
+anthropic==0.40.0
