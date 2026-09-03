@@ -15,6 +15,7 @@ const BACKEND_URL = process.env.VITE_API_BASE_URL || 'http://localhost:8001'
 const proxy = {
   '/cases': { target: BACKEND_URL, changeOrigin: true },
   '/health': { target: BACKEND_URL, changeOrigin: true },
+  '/simulate': { target: BACKEND_URL, changeOrigin: true },
 }
 
 // https://vite.dev/config/

@@ -1,6 +1,16 @@
 from fastapi import FastAPI
 
-from app.api import cases, decisions, drafts, evidence, evidence_gap, evidence_packet, scoring, verify
+from app.api import (
+    cases,
+    decisions,
+    drafts,
+    evidence,
+    evidence_gap,
+    evidence_packet,
+    scoring,
+    simulate,
+    verify,
+)
 
 app = FastAPI(
     title="DisputeWise API",
@@ -16,6 +26,7 @@ app.include_router(evidence_gap.router)
 app.include_router(evidence_packet.router)
 app.include_router(drafts.router)
 app.include_router(verify.router)
+app.include_router(simulate.router)
 
 
 @app.get("/health", tags=["health"])

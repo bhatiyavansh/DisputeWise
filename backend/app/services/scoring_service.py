@@ -136,9 +136,21 @@ def _evidence_summary(evidence_rows: list[Evidence]) -> dict:
     }
 
 
-def score_case(db: Session, case_id: str, model: RiskModel, top_n: int = 5) -> dict:
-    """Score one stored case. Raises CaseNotFoundError if it does not exist."""
-    dispute, evidence_rows = _load_case(db, case_id)
+def score_parts(dispute, evidence_rows: list, model: RiskModel, top_n: int = 5) -> dict:
+    """Score from already-materialized case parts, with no database access.
+
+    This is the entire Phase 2 scoring path -- frame construction, the
+    leakage-safe feature builder, the model, and calibration -- factored out
+    of score_case() so callers that hold case parts in memory rather than in
+    the database (Phase 6 simulation) run *exactly* this code rather than a
+    parallel implementation of it.
+
+    `dispute` and `evidence_rows` are duck-typed: any object exposing the
+    same attributes as app.models.dispute.Dispute (including .transaction ->
+    .customer) and app.models.evidence.Evidence works. Nothing here reads
+    the outcomes table -- the leakage guarantee in build_features()'s
+    signature is inherited unchanged.
+    """
     frames = _to_frames(dispute, evidence_rows)
 
     features = build_features(
@@ -159,3 +171,9 @@ def score_case(db: Session, case_id: str, model: RiskModel, top_n: int = 5) -> d
         "top_negative_factors": scored.top_negative_factors,
         "evidence_summary": _evidence_summary(evidence_rows),
     }
+
+
+def score_case(db: Session, case_id: str, model: RiskModel, top_n: int = 5) -> dict:
+    """Score one stored case. Raises CaseNotFoundError if it does not exist."""
+    dispute, evidence_rows = _load_case(db, case_id)
+    return score_parts(dispute, evidence_rows, model, top_n=top_n)
