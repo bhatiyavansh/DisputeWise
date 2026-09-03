@@ -6,6 +6,7 @@ import type {
   EvidenceGapResponse,
   EvidenceItem,
   EvidencePacketResponse,
+  EvidenceScenarioResponse,
   Page,
   ScoreResponse,
   SimulationResponse,
@@ -357,6 +358,70 @@ export function makeSimulation(overrides: Partial<SimulationResponse> = {}): Sim
     },
     disclaimer:
       'Scenario analysis on a hypothetical dispute. Not a real case, not persisted, and not a recommendation to act.',
+    ...overrides,
+  }
+}
+
+export function makeScenario(overrides: Partial<EvidenceScenarioResponse> = {}): EvidenceScenarioResponse {
+  const currentScore = {
+    raw_probability: 0.9678,
+    calibrated_probability: 0.968,
+    risk_band: 'HIGH_WINNABILITY' as const,
+    top_positive_factors: SCORE_RESPONSE.top_positive_factors,
+    top_negative_factors: SCORE_RESPONSE.top_negative_factors,
+    evidence_summary: SCORE_RESPONSE.evidence_summary,
+  }
+  return {
+    case_id: 'DSP-031597',
+    reason_code: 'goods_not_received',
+    is_scenario: true,
+    evidence_added: ['proof_of_delivery'],
+    evidence_removed: [],
+    current: {
+      score: currentScore,
+      decision: {
+        decision: 'HUMAN_REVIEW',
+        reason: 'Key evidence for this reason code is missing.',
+        evidence_gap_downgrade: true,
+        expected_recovery: 26650.51,
+        expected_net_value: 26350.51,
+        contest_cost: 300,
+        break_even_probability: 0.011,
+        sensitivity: [],
+      },
+      evidence_gap: EVIDENCE_GAP_RESPONSE,
+    },
+    scenario: {
+      score: { ...currentScore, calibrated_probability: 0.975 },
+      decision: {
+        decision: 'CONTEST',
+        reason: 'Expected recovery materially exceeds estimated contest cost.',
+        evidence_gap_downgrade: false,
+        expected_recovery: 26842.99,
+        expected_net_value: 26542.99,
+        contest_cost: 300,
+        break_even_probability: 0.011,
+        sensitivity: [],
+      },
+      evidence_gap: { ...EVIDENCE_GAP_RESPONSE, coverage_ratio: 0.875 },
+    },
+    delta: {
+      calibrated_probability: 0.007,
+      expected_net_value: 192.48,
+      decision_changed: true,
+      decision_from: 'HUMAN_REVIEW',
+      decision_to: 'CONTEST',
+      critical_gaps_resolved: ['proof_of_delivery'],
+      critical_gaps_introduced: [],
+    },
+    model_version: 'risk-v1',
+    feature_schema_version: 'features-v1',
+    decision_policy_version: 'decision-v1',
+    evidence_schema_version: 'evidence-v1',
+    generated_at: '2026-09-03T19:00:00Z',
+    persisted: false,
+    disclaimer:
+      'Scenario analysis -- not a causal estimate. These are two model evaluations under two different evidence states.',
     ...overrides,
   }
 }

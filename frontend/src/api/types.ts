@@ -512,3 +512,67 @@ export interface SimulationResponse {
   trace: SimulationTrace
   disclaimer: string
 }
+
+// ---------------------------------------------------------------------------
+// POST /cases/{id}/evidence-scenario  (Phase 7A -- scenario analysis)
+// ---------------------------------------------------------------------------
+
+export interface EvidenceScenarioRequest {
+  add_evidence?: EvidenceType[]
+  remove_evidence?: EvidenceType[]
+}
+
+export interface ScenarioScore {
+  raw_probability: number
+  calibrated_probability: number
+  risk_band: RiskBand
+  top_positive_factors: ContributingFactor[]
+  top_negative_factors: ContributingFactor[]
+  evidence_summary: EvidenceSummary
+}
+
+export interface ScenarioDecision {
+  decision: Decision
+  reason: string
+  evidence_gap_downgrade: boolean
+  expected_recovery: number
+  expected_net_value: number
+  contest_cost: number
+  break_even_probability: number | null
+  sensitivity: SensitivityPoint[]
+}
+
+export interface ScenarioSide {
+  score: ScenarioScore
+  decision: ScenarioDecision
+  evidence_gap: EvidenceGapResponse
+}
+
+export interface ScenarioDelta {
+  calibrated_probability: number
+  expected_net_value: number
+  decision_changed: boolean
+  decision_from: Decision
+  decision_to: Decision
+  critical_gaps_resolved: EvidenceType[]
+  critical_gaps_introduced: EvidenceType[]
+}
+
+export interface EvidenceScenarioResponse {
+  case_id: string
+  reason_code: ReasonCode
+  is_scenario: boolean
+  evidence_added: EvidenceType[]
+  evidence_removed: EvidenceType[]
+  current: ScenarioSide
+  scenario: ScenarioSide
+  delta: ScenarioDelta
+  model_version: string
+  feature_schema_version: string
+  decision_policy_version: string
+  evidence_schema_version: string
+  generated_at: string
+  /** Always false. Scenario analysis never modifies or stores the case. */
+  persisted: boolean
+  disclaimer: string
+}

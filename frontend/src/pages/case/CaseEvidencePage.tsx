@@ -1,5 +1,6 @@
 import { useOutletContext } from 'react-router-dom'
 import { EvidenceGapPanel } from '../../components/case/EvidenceGapPanel'
+import { EvidenceScenarioPanel } from '../../components/case/EvidenceScenarioPanel'
 import { EvidenceInventory } from '../../components/case/EvidenceInventory'
 import { EvidencePacketViewer } from '../../components/case/EvidencePacketViewer'
 import { ErrorState } from '../../components/common/ErrorState'
@@ -19,7 +20,12 @@ export function CaseEvidencePage() {
       {gapQuery.status === 'error' && (
         <ErrorState error={gapQuery.error} title="Evidence gap analysis unavailable" onRetry={gapQuery.refetch} compact />
       )}
-      {gapQuery.status === 'success' && gapQuery.data && <EvidenceGapPanel gap={gapQuery.data} />}
+      {gapQuery.status === 'success' && gapQuery.data && (
+        <>
+          <EvidenceGapPanel gap={gapQuery.data} />
+          <EvidenceScenarioPanel caseId={caseId} gap={gapQuery.data} />
+        </>
+      )}
 
       {evidenceQuery.status === 'loading' && <SkeletonCard />}
       {evidenceQuery.status === 'error' && (
