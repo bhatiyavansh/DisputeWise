@@ -192,6 +192,198 @@ export interface DecisionResponse {
 }
 
 // ---------------------------------------------------------------------------
+// POST /cases/{id}/evidence-gap  (Phase 4, Part A)
+// ---------------------------------------------------------------------------
+
+export type EvidenceGapStatus = 'AVAILABLE' | 'MISSING'
+export type EvidenceGapRelevance = 'HIGH' | 'MEDIUM' | 'LOW'
+export type EvidenceGapPriority = 'CRITICAL' | 'IMPORTANT' | 'OPTIONAL' | 'NONE'
+
+export interface EvidenceGapItem {
+  evidence_type: EvidenceType
+  required: boolean
+  status: EvidenceGapStatus
+  relevance: EvidenceGapRelevance
+  priority: EvidenceGapPriority
+  reason: string
+  source_id: string
+  strength: number
+  evidence_id: string | null
+}
+
+export interface EvidenceGapResponse {
+  case_id: string
+  reason_code: ReasonCode
+  schema_version: string
+  coverage: { required: number; available: number; missing: number }
+  coverage_ratio: number
+  items: EvidenceGapItem[]
+}
+
+// ---------------------------------------------------------------------------
+// POST /cases/{id}/evidence-packet  (Phase 4, Part B)
+// ---------------------------------------------------------------------------
+
+export interface EvidencePacketItem {
+  evidence_id: string
+  evidence_type: EvidenceType
+  available: boolean
+  value: Record<string, unknown> | null
+  relevance: EvidenceRelevance
+  strength: number
+  claim_type: string
+}
+
+export interface ReasonCodeGuidance {
+  reason_code_id: string
+  reason_code_name: string
+  description: string
+  source_id: string
+  claim_type: string
+}
+
+export interface EvidencePacketTransactionFacts {
+  payment_method: string
+  transaction_status: string
+  three_ds_authenticated: boolean
+  avs_result: string
+  cvv_result: string
+}
+
+export interface EvidencePacketCustomerFacts {
+  account_age_days: number
+  previous_order_count: number
+  previous_successful_order_count: number
+  previous_dispute_count: number
+  previous_refund_count: number
+}
+
+export interface EvidencePacketResponse {
+  case_id: string
+  schema_version: string
+  generated_at: string
+  reason_code: ReasonCode
+  dispute_amount: number
+  dispute_status: string
+  transaction: EvidencePacketTransactionFacts
+  customer: EvidencePacketCustomerFacts
+  evidence: EvidencePacketItem[]
+  gap: EvidenceGapResponse
+  guidance: ReasonCodeGuidance
+}
+
+// ---------------------------------------------------------------------------
+// POST /cases/{id}/draft, POST /cases/{id}/verify  (Phase 4, Parts D-I)
+// ---------------------------------------------------------------------------
+
+export interface RetrievalResult {
+  chunk_id: string
+  text: string
+  source_id: string
+  source_name: string
+  source_url: string
+  relevance_score: number
+  metadata: {
+    doc_type: string
+    reason_code_id: string
+    evidence_type: EvidenceType | null
+    relevance: string | null
+    addresses_gap: boolean
+  }
+}
+
+export type ClaimType = 'fact' | 'reference' | 'inference' | 'summary'
+
+export interface GeneratedClaim {
+  claim_id: string
+  text: string
+  claim_type: ClaimType
+  evidence_ids: string[]
+  source_ids: string[]
+}
+
+export type ClaimVerificationStatus = 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'INVALID_REFERENCE' | 'INCOMPLETE'
+
+export interface ClaimVerification {
+  claim_id: string
+  status: ClaimVerificationStatus
+  evidence_ids: string[]
+  source_ids: string[]
+  explanation: string
+  verifier_version: string
+}
+
+export type ResponseState = 'DRAFT_READY' | 'DRAFT_FLAGGED' | 'DRAFT_BLOCKED' | 'GENERATION_UNAVAILABLE'
+
+export interface DecisionSummary {
+  decision: Decision
+  calibrated_probability: number
+  expected_net_value: number
+  risk_band: RiskBand
+}
+
+export interface ResponseTrace {
+  case_id: string
+  decision: string | null
+  model_version: string
+  feature_schema_version: string
+  decision_policy_version: string | null
+  evidence_schema_version: string
+  knowledge_base_version: string
+  retrieval_config_version: string
+  prompt_version: string
+  response_schema_version: string
+  verifier_version: string
+  retrieved_source_ids: string[]
+  retrieved_chunk_ids: string[]
+  cited_evidence_ids: string[]
+  claim_count: number
+  claim_statuses: Record<string, number>
+  response_state: ResponseState
+  generated_at: string
+}
+
+export interface DraftResponse {
+  case_id: string
+  reason_code: ReasonCode
+
+  model_version: string
+  feature_schema_version: string
+  decision_policy_version: string | null
+  evidence_schema_version: string
+  knowledge_base_version: string
+  prompt_version: string
+  response_schema_version: string
+  verifier_version: string
+
+  decision: DecisionSummary | null
+  evidence_gap: EvidenceGapResponse
+  retrieved_sources: RetrievalResult[]
+
+  generation_available: boolean
+  summary: string | null
+  claims: GeneratedClaim[]
+  missing_evidence: EvidenceType[]
+  response_body: string | null
+
+  claim_verifications: ClaimVerification[]
+  response_state: ResponseState
+  response_state_reason: string
+
+  trace: ResponseTrace
+  disclaimer: string
+}
+
+export interface VerifyResponse {
+  case_id: string
+  verifier_version: string
+  claim_verifications: ClaimVerification[]
+  response_state: ResponseState
+  response_state_reason: string
+  disclaimer: string
+}
+
+// ---------------------------------------------------------------------------
 // Filters used by the inbox
 // ---------------------------------------------------------------------------
 
@@ -200,4 +392,123 @@ export interface CaseListFilters {
   page_size?: number
   reason_code?: ReasonCode
   status?: DisputeStatus
+}
+
+// ---------------------------------------------------------------------------
+// POST /simulate  (Phase 6 -- hypothetical dispute, never persisted)
+// ---------------------------------------------------------------------------
+
+/** Mirrors app/schemas/simulation.py's SimulationRequest. The backend model
+ * is `extra="forbid"` and rejects every outcome/target field by name, so
+ * there is deliberately no field here describing a dispute's result. */
+export interface SimulationRequest {
+  simulation_case_id?: string
+
+  reason_code: ReasonCode
+  dispute_amount: number
+  dispute_status?: DisputeStatus
+
+  transaction_amount: number
+  payment_method?: 'card' | 'upi' | 'netbanking'
+  transaction_status?: 'captured' | 'refunded' | 'failed'
+  capture_lag_minutes?: number
+  days_transaction_to_dispute?: number
+  days_to_respond?: number
+
+  three_ds_authenticated?: boolean
+  avs_result?: 'Y' | 'N' | 'U' | 'M'
+  cvv_result?: 'M' | 'N' | 'U'
+  device_match?: boolean
+  ip_match?: boolean
+  billing_shipping_match?: boolean
+
+  account_age_days?: number
+  previous_order_count?: number
+  previous_successful_order_count?: number
+  previous_dispute_count?: number
+  previous_refund_count?: number
+
+  delivery_confirmed?: boolean
+  tracking_available?: boolean
+  delivery_address_match?: boolean
+  proof_of_delivery?: boolean
+  delivery_days_after_capture?: number
+
+  customer_communication_available?: boolean
+  cancellation_request?: boolean
+  refund_request?: boolean
+
+  evidence_on_file?: EvidenceType[]
+  evidence_not_on_file?: EvidenceType[]
+
+  generate_response?: boolean
+}
+
+export interface SimulationScore {
+  raw_probability: number
+  calibrated_probability: number
+  risk_band: RiskBand
+  calibration_method: string
+  top_positive_factors: ContributingFactor[]
+  top_negative_factors: ContributingFactor[]
+  evidence_summary: EvidenceSummary
+}
+
+export interface SimulationDecision {
+  decision: Decision
+  reason: string
+  decision_policy_version: string
+  evidence_gap_downgrade: boolean
+  dispute_amount: number
+  recovery_rate: number
+  recoverable_amount: number
+  contest_cost: number
+  expected_recovery: number
+  expected_net_value: number
+  break_even_probability: number | null
+  break_even_explanation: string
+  sensitivity: SensitivityPoint[]
+}
+
+export interface SimulationGeneration {
+  response_state: ResponseState
+  response_state_reason: string
+  generation_available: boolean
+  summary: string | null
+  response_body: string | null
+  claims: GeneratedClaim[]
+  claim_verifications: ClaimVerification[]
+  missing_evidence: EvidenceType[]
+}
+
+export interface SimulationTrace {
+  simulation_id: string
+  model_version: string
+  feature_schema_version: string
+  decision_policy_version: string
+  evidence_schema_version: string
+  knowledge_base_version: string
+  retrieval_config_version: string
+  /** null when the stage did not run -- generation is opt-in. */
+  prompt_version: string | null
+  response_schema_version: string | null
+  verifier_version: string | null
+  retrieved_source_ids: string[]
+  retrieved_chunk_ids: string[]
+  generated_at: string
+  /** Always false. Simulations are scenario analysis, never stored. */
+  persisted: boolean
+}
+
+export interface SimulationResponse {
+  simulation_id: string
+  is_simulation: boolean
+  reason_code: ReasonCode
+  score: SimulationScore
+  decision: SimulationDecision
+  evidence_gap: EvidenceGapResponse
+  retrieved_sources: RetrievalResult[]
+  generation: SimulationGeneration | null
+  trace: SimulationTrace
+  disclaimer: string
 }

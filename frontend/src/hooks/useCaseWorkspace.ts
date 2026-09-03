@@ -1,5 +1,7 @@
 import { getCase, getCaseEvidence } from '../api/cases'
 import { decideCase } from '../api/decisions'
+import { getEvidenceGap, getEvidencePacket } from '../api/evidence'
+import { generateDraft } from '../api/response'
 import { scoreCase } from '../api/scoring'
 import { useAsyncResource } from './useAsyncResource'
 import { toNumber } from '../utils/format'
@@ -35,4 +37,26 @@ export function useDecision(
   return useAsyncResource(`decision:${caseId}`, (signal) =>
     decideCase(caseId, { score: score.data ?? undefined, disputeAmount: toNumber(disputeAmount) ?? undefined }, signal),
   )
+}
+
+/** Phase 4 Part A -- evidence gap analysis (reason code + evidence -> required/available/missing). */
+export function useEvidenceGap(caseId: string) {
+  return useAsyncResource(`evidence-gap:${caseId}`, (signal) => getEvidenceGap(caseId, signal))
+}
+
+/** Phase 4 Part B -- the full evidence packet (facts + evidence + gap + guidance). */
+export function useEvidencePacket(caseId: string) {
+  return useAsyncResource(`evidence-packet:${caseId}`, (signal) => getEvidencePacket(caseId, signal))
+}
+
+/**
+ * Phase 4 Parts E-I -- the grounded response draft. Deliberately NOT
+ * fetched automatically alongside the other case resources: unlike
+ * score/decision/evidence (cheap, deterministic), generating a draft calls
+ * an LLM and can take significant time, so it is only requested once
+ * `enabled` is true (the Response tab sets this once the analyst opens it;
+ * `useAsyncResource` treats a `null` cacheKey as "don't fetch yet").
+ */
+export function useDraft(caseId: string, enabled: boolean) {
+  return useAsyncResource(enabled ? `draft:${caseId}` : null, (signal) => generateDraft(caseId, signal))
 }

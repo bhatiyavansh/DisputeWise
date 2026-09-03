@@ -47,6 +47,10 @@ function classifyStatus(status: number): ApiErrorKind {
 interface RequestOptions {
   method?: 'GET' | 'POST'
   query?: Record<string, string | number | undefined>
+  /** JSON-serialized as the request body. Only /verify needs this so far
+   * (every other POST endpoint takes no body -- the case_id in the URL is
+   * enough). */
+  body?: unknown
   signal?: AbortSignal
   timeoutMs?: number
 }
@@ -68,7 +72,7 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', query, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options
+  const { method = 'GET', query, body, signal, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   const url = buildUrl(path, query)
 
   const controller = new AbortController()
@@ -79,7 +83,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     response = await fetch(url, {
       method,
-      headers: { Accept: 'application/json' },
+      headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: combinedSignal,
     })
   } catch (error) {
