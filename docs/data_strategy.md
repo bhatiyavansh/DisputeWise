@@ -5,7 +5,7 @@ DisputeWise uses three distinct categories of data, each with a different purpos
 | Directory | Category | Purpose |
 |---|---|---|
 | `data/generated/`, `data/locked/test/` | **Synthetic ML dataset** | Model training, validation, and locked held-out evaluation |
-| `data/reference/` | **Public domain reference data** | Domain knowledge grounding the generator's assumptions; future Phase 4 RAG corpus |
+| `data/reference/` | **Public domain reference data** | Domain knowledge grounding the generator's assumptions; the RAG knowledge base (`knowledge-v1`) is built from this directory |
 | `data/external/` | **External real-world benchmark (if any)** | Out-of-distribution sanity check against an already-trained model — never training data |
 
 This document explains why, and how the pieces relate. It does not change or regenerate any existing dataset — see [docs/phase1.md](phase1.md) for the synthetic generator's own methodology, which is unchanged by this upgrade.

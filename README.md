@@ -1,452 +1,402 @@
 # DisputeWise
 
-AI-powered chargeback intelligence — a defense-only system that helps merchants decide **which chargebacks are worth contesting, and why**.
+**AI-powered chargeback intelligence and evidence optimization.**
 
-This is **not** a chatbot that writes dispute letters. The eventual system assembles evidence, predicts case-level winnability, explains the prediction, weighs expected recovery against expected cost, routes the case to a human-reviewable recommendation, and only then (for cases worth pursuing) drafts an evidence-grounded response. It never auto-submits a dispute.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![LightGBM](https://img.shields.io/badge/LightGBM-4.5-yellowgreen)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-backend%20%2B%20frontend-brightgreen)
 
-## What it is (Phase 1)
+> Merchants don't have a chargeback-response problem. They have a decision problem.
 
-Phase 1 builds the data and backend foundation everything else sits on:
+DisputeWise predicts whether a dispute is worth contesting, explains why, identifies what evidence is missing, estimates the economic value of contesting, and — only when a draft response's claims can be independently verified against the case's own evidence — produces a grounded response for a human to review. It never submits anything on its own.
 
-- A reproducible **synthetic chargeback dataset generator** (~50k cases, four scenario archetypes, probabilistic outcomes).
-- A **PostgreSQL** relational schema (customers, transactions, disputes, evidence, outcomes).
-- A **FastAPI** backend exposing the case/evidence read API, plus explicit not-implemented stubs for scoring/decisioning/drafting.
-- A **locked, checksummed held-out test set** that later phases evaluate against exactly once.
+---
 
-No ML model, no SHAP, no RAG, no LLM calls, and no frontend are implemented yet — that's intentional. See [docs/phase1.md](docs/phase1.md) for the technical detail behind each piece.
+## 1. The problem
 
-## Phase 1 architecture
+Chargebacks are expensive to fight and expensive to ignore. Evidence for a dispute is scattered across authentication logs, fulfillment records, and customer history, and merchants routinely make one of two mistakes: contesting cases that have no realistic chance of winning (wasted operational cost), or not contesting cases that would have won because assembling evidence felt like too much work.
+
+A model that just predicts "will this dispute succeed" doesn't solve the problem either — a high win probability doesn't mean contesting is worth the cost, and a plausible-sounding AI-drafted response is worthless (or dangerous) if it cites evidence that doesn't exist. Any system that touches this workflow needs three things at once: **decision support** (is this worth pursuing, economically), **evidence intelligence** (what do we have, what's missing, what does policy require), and **verification** (does every sentence of a generated response actually trace back to something real). DisputeWise is built around the belief that skipping any of the three makes the other two unsafe to use.
+
+## 2. What DisputeWise does
+
+```mermaid
+flowchart TD
+    A[Case] --> B[Evidence & transaction context]
+    B --> C["Winnability model (risk-v1)"]
+    C --> D["Economic decision (decision-v1)"]
+    D --> E["Evidence gap analysis (evidence-v1)"]
+    E --> F["Reference retrieval (knowledge-v1)"]
+    F --> G["Structured response generation (prompt-v1.1)"]
+    G --> H["Claim-level verification (verifier-v1.1)"]
+    H --> I[Human approval boundary]
+```
+
+**Winnability model.** A LightGBM classifier scores `P(favorable outcome | evidence)` from 94 leakage-safe features, calibrated with Platt scaling, explained per-case with exact TreeSHAP contributions. It says nothing about whether to contest — that's a separate, deliberately non-ML decision.
+
+**Economic decision.** Combines the calibrated probability with the dispute amount, an assumed recovery rate, and a contest cost to compute expected recovery and expected net value, then routes the case to `CONTEST`, `HUMAN_REVIEW`, or `DO_NOT_CONTEST`. A case with strong evidence and clearly positive economics can still be routed to `HUMAN_REVIEW` — the evidence gate below is the reason why.
+
+**Evidence gap analysis.** Reads the case's reason code and its evidence rows against reference requirements (never per-case hardcoded rules) and reports exactly what's required, what's on file, and what's critically missing. If a `CONTEST`-eligible case is missing high-relevance evidence for its reason code, the gate downgrades it to `HUMAN_REVIEW` — regardless of how confident the model is.
+
+**Reference retrieval.** A small TF-IDF retriever over a 51-chunk knowledge base built from public reason-code/evidence documentation (`data/reference/`) — no vector database or embedding model, because the corpus doesn't need one. Retrieval is filtered by reason code and biased toward chunks that address the case's actual evidence gaps.
+
+**Structured response generation.** An LLM is called through a forced tool-call contract — it can only emit a JSON object matching a strict schema, never free-text prose. The schema is validated with Pydantic before anything downstream touches it.
+
+**Claim-level verification.** Every claim in a generated draft is independently checked, deterministically, against the case's own evidence, cited source IDs, and allowed field values. One unverifiable claim blocks the entire draft — a majority of good claims never outvotes a single bad one.
+
+**Human approval boundary.** The pipeline stops here. Nothing is submitted to a card network, no customer is contacted, and no dispute status changes automatically — always.
+
+## 3. The product
+
+Everything below is one connected application over the same case data and the same pipeline above — not separate disconnected demos.
+
+| Surface | What it's for |
+|---|---|
+| **Dispute inbox** | Browse, filter, and search real cases |
+| **Case investigation** | Open one case: winnability, SHAP factors, evidence inventory |
+| **Decision workspace** | Expected recovery/net value, break-even and sensitivity analysis, the routing explanation |
+| **Evidence workspace** | Gap analysis against reason-code requirements, the evidence packet, retrieved reference guidance |
+| **AI response workspace** | Generate a grounded draft, inspect every claim's verification result |
+| **Audit / provenance** | The full stage-by-stage trace for one case — versions, sources, states |
+| **New dispute simulation** | Score a hypothetical dispute through the real pipeline — never persisted |
+| **Evidence scenario analysis** | "What if this evidence were added or removed?" for a real case — never persisted, never mutates the case |
+| **Policy playground** | Explore hypothetical contest-cost/threshold economics against real portfolio data — never mutates the production policy |
+| **Portfolio risk view** | Aggregate routing, amount at risk, and coverage across the dataset |
+
+**Screenshots** — case overview with SHAP factors, the economic decision breakdown, the decision explanation, evidence gap analysis, and evidence scenario analysis (the exact DSP-031597 example above, live):
+
+<p>
+  <img src="docs/screenshots/overview.png" width="49%" alt="Case overview: winnability and SHAP factors">
+  <img src="docs/screenshots/decision_chart.png" width="49%" alt="Economic decision: break-even and sensitivity">
+</p>
+<p>
+  <img src="docs/screenshots/decision_reason.png" width="49%" alt="Decision explanation">
+  <img src="docs/screenshots/evidence_gap.png" width="49%" alt="Evidence gap analysis">
+</p>
+<p>
+  <img src="docs/screenshots/scenario_analysis.png" width="70%" alt="Evidence scenario analysis: HUMAN_REVIEW to CONTEST">
+</p>
+
+## 4. Why this is different
+
+Most "AI writes a dispute response" projects stop at generation. DisputeWise treats generation as the last, least-trusted step in a longer decision pipeline.
+
+| | Generic LLM dispute-writer | DisputeWise |
+|---|---|---|
+| Decides whether to act first | No — writes on request | Yes — economic decision precedes generation |
+| Economic reasoning | None | Expected recovery/net value, explicit cost assumptions |
+| Evidence-aware routing | None | High-confidence cases can still be gated to human review on missing evidence |
+| Grounding | Prompt-only, hope | Retrieval biased toward the case's actual gaps |
+| Claim verification | None, or LLM self-grading | Deterministic, independent, claim-by-claim |
+| Failure mode | Fabricates fluently | Blocks the draft and says why |
+| Human boundary | Often implicit | Explicit, structural — no submission path exists |
+| Evaluation | Vibes | Locked held-out test set, checksum-guarded, reproducible |
+| Leakage protection | Rarely addressed | Target unreachable by construction, audited |
+| What-if analysis | None | Simulation, evidence scenarios, and policy sensitivity, all read-only |
+| Explainability | None or post-hoc | SHAP + a full provenance trail per case |
+
+## 5. Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client
+        FE["React + TypeScript frontend"]
+    end
+    FE --> API["FastAPI"]
+
+    subgraph Services
+        SC[scoring]
+        DE[decision]
+        EI["evidence intelligence"]
+        SI[simulation]
+        SA["scenario analysis"]
+        PS["policy simulation"]
+        PO[portfolio]
+        PR[provenance]
+    end
+    API --> SC & DE & EI & SI & SA & PS & PO & PR
+
+    subgraph ML["ML pipeline"]
+        FB["feature builder"] --> LGB["LightGBM"] --> CAL["calibration"] --> SHP["SHAP"]
+    end
+    SC --> ML
+    SI --> ML
+    SA --> ML
+
+    subgraph Evidence["Evidence intelligence pipeline"]
+        REF["reference data"] --> RET["reason-code retrieval"] --> PKT["evidence packet"] --> LLM["LLM (forced tool call)"] --> VER["deterministic verifier"]
+    end
+    EI --> Evidence
+
+    ML --> DB[(PostgreSQL)]
+    Evidence --> DB
+    API --> DB
+```
+
+A modular monolith, not microservices: one FastAPI application, one Postgres database, service modules with clear boundaries (`app/services/*`) rather than network calls between them. Everything runs under Docker Compose.
+
+Deeper technical detail: [docs/architecture.md](docs/architecture.md).
+
+## 6. Model + evaluation
+
+Locked held-out test set, n = 7,446, evaluated **once**, calibrated:
+
+| Metric | Value |
+|---|---|
+| ROC-AUC | **0.8990** |
+| PR-AUC | **0.9334** |
+| Precision | 0.8589 |
+| Recall | 0.8705 |
+| F1 | 0.8647 |
+| Brier | 0.1217 |
+| ECE | 0.0122 |
+| FPR | 0.2333 |
+| FNR | 0.1295 |
+
+Confusion matrix @ threshold 0.44 (selected on validation, never on test): TP 4,019 · TN 2,169 · FP 660 · FN 598.
+
+Against the strongest of three evidence-completeness baselines (ROC-AUC 0.7579, F1 0.7715, Brier 0.2094): **+0.1412 ROC-AUC, +0.0932 F1, −0.0877 Brier**.
+
+**The test set was locked before model evaluation and was not used for threshold or policy tuning.** `data/locked/test/` is generated once, checksummed, and every official evaluation script re-verifies that checksum before and after running. The split is customer-level (not case-level), so no customer's cases straddle train/validation/test. `build_features()` structurally cannot see the outcomes table — leakage is prevented by the function signature, not by remembering to drop a column — and `recovery_amount` was audited and excluded as a near-perfect target proxy.
+
+Full methodology, baselines, and the exact reproduction commands: [docs/evaluation.md](docs/evaluation.md) and [docs/phase2.md](docs/phase2.md).
+
+## 7. Decision engine
 
 ```
-disputewise/
-├── backend/            FastAPI app, SQLAlchemy models, Alembic migrations, pytest suite
-├── data/
-│   ├── generated/      train/validation/test CSVs -- regenerated freely, gitignored
-│   ├── locked/test/    the FROZEN held-out test set -- committed, never regenerated in place
-│   └── metadata/       lock metadata (checksum, seed, row counts) + generation summary
-├── scripts/            generate_dataset.py / load_database.py / verify_dataset.py
-├── docker-compose.yml  postgres + backend
-└── docs/phase1.md      data generation methodology, schema notes, reproducibility
+expected recovery = P(win) × recoverable amount
+expected net value = expected recovery − contest cost
 ```
 
-## Local setup
+A case becomes **CONTEST** when expected net value clears a minimum by more than a review margin *and* the model is confident; **DO_NOT_CONTEST** under the mirror condition; everything else — including every case near the economic boundary — is **HUMAN_REVIEW**.
 
-Requires Docker + Docker Compose.
+**Evidence gate**, applied separately from the economics: a `CONTEST`-eligible case with missing high-relevance evidence for its reason code is downgraded to `HUMAN_REVIEW`. This is the one place evidence completeness overrides the model's own confidence, and it only ever moves in that direction.
+
+`contest_cost=₹300` and `recovery_rate=1.0` are **prototype assumptions**, not verified production economics. That assumption has a real, visible consequence on the validation split: at ₹300, a naive "contest everything" baseline realizes **₹10.35M** vs the policy's **₹5.40M**, because filing costs so little relative to typical dispute value that even the 16.6%-favorable `DO_NOT_CONTEST` bucket is worth pursuing. Raise the assumed cost to ₹5,000 and it inverts sharply: contest-everything collapses to **−₹24.6M** while the policy holds its **+₹5.40M**. The model separates the buckets cleanly either way (91.2% vs 16.6% favorable) — what changes is whether the cost assumption makes routing worth doing. The [policy playground](#3-the-product) makes this sensitivity explorable directly.
+
+## 8. Evidence intelligence
+
+Evidence requirements are **reason-code-specific and reference-driven** — read from `data/reference/` per reason code, never hardcoded per case. For `goods_not_received`, delivery confirmation and proof of delivery matter; for `unauthorized_transaction`, authentication signals matter; for `duplicate_charge`, transaction/order history matters. The same gap analyzer produces the coverage numbers behind the evidence gate above, the evidence packet handed to generation, and the retrieval query.
+
+The **evidence packet** is the narrow, LLM-safe view of a case: it structurally excludes raw PII and every outcome/target field — there is no `favorable_outcome` or `recovery_amount` anywhere in its schema to leak.
+
+Retrieval runs against `knowledge-v1` — 51 deterministic chunks built from the same reference data, TF-IDF ranked, filtered by reason code, and biased toward chunks that address the case's actual gaps.
+
+## 9. AI safety / grounding
+
+**The LLM does not decide whether a claim is true.** It produces a structured draft under a forced tool-call contract; a separate, deterministic verifier then checks every claim independently.
+
+A claim must trace to real case evidence, an allowed case field, or retrieved reference material — never to something invented. Any claim that fails is `UNSUPPORTED` or `INVALID_REFERENCE`, and **a single such claim blocks the entire response**, regardless of how many other claims are fine. Every hallucination scenario in the adversarial test suite — a fabricated delivery date, evidence claimed present that isn't, cross-case evidence contamination, a nonexistent evidence ID, guaranteed-win language, a fabricated policy citation — passes: **13/13**.
+
+The provider is pinned to a specific free OpenRouter model (`nvidia/nemotron-3-super-120b-a12b:free`), never a routing alias, so a demo run can never silently land on a different model. There is no retry loop, no LLM self-grading, and no fallback that parses free-text as if it were validated structured output.
+
+**No automatic dispute submission. No customer-facing autonomous action. No external side effects, ever.** This is structural — there is no code path from a draft to an outbound submission.
+
+## 10. Simulation + what-if analysis
+
+- **New dispute simulation** — score a fully hypothetical case through the exact pipeline a real case uses. Nothing is persisted.
+- **Evidence scenario analysis** — add or remove hypothetical evidence on a real, stored case and compare the current and hypothetical score/decision/gap side by side. The stored case is never mutated.
+- **Policy playground** — explore hypothetical contest-cost and threshold economics against real portfolio data. The production decision policy is never modified.
+
+**None of this is causal inference.** A scenario result is two model evaluations under two different inputs, not an estimate of what obtaining a piece of evidence would cause in the real world — both the API responses and the UI say so explicitly.
+
+## 11. Portfolio + provenance
+
+The **portfolio risk view** aggregates the real dataset under the production policy: decision distribution, amount at risk per bucket, and breakdowns by reason code, probability band, and evidence completeness — computed server-side, never by pulling the full dataset into the browser.
+
+The **provenance trail** renders, per case, the exact chain of versions that produced its result — model, feature schema, decision policy, evidence schema, knowledge base, retrieval config, prompt, response schema, verifier — plus which sources were retrieved and how each claim was verified. **No chain-of-thought is ever stored or rendered**; a stage that did not run is shown as not run, never given a plausible-looking version it didn't actually report.
+
+## 12. Data
+
+```
+data/
+├── generated/    train/validation/test CSVs — reproducible, gitignored
+├── locked/test/  the frozen held-out test set — committed, never regenerated in place
+├── reference/    public-domain reason-code/evidence documentation — the RAG corpus source
+├── external/     external benchmark data, kept separate — never merged into training
+└── metadata/     lock checksum, generation summary, data manifest
+```
+
+50,000 synthetic chargeback cases (seed 42), split at the **customer** level: 35,115 train / 7,439 validation / 7,446 locked test. The locked test set's SHA-256 is `e1e8cd5054c92fd399c50fa733c0256ec05bea6c13c80a15165c7cd5d0693b5c`, re-verified by every official evaluation script before and after it runs.
+
+The dataset is synthetic — **not real merchant data.** Public reference data (Stripe/Visa/Verifi documentation, with full provenance in `data/reference/sources.json`) grounds the generator's assumptions and is never treated as ML training data or a label source. Any external real-world data is kept in a separate directory and used only as an out-of-distribution check, never merged into training or evaluation.
+
+Full rationale: [docs/data_strategy.md](docs/data_strategy.md) and [docs/external_data.md](docs/external_data.md).
+
+## 13. Quick start
+
+Requires Docker and Docker Compose.
 
 ```bash
+git clone <this-repo>
+cd disputewise
+
 cp .env.example .env
-
-# 1. Generate the dataset (writes data/generated/{train,validation,test}/*.csv)
-docker compose run --rm backend python /scripts/generate_dataset.py --seed 42 --n-cases 50000
-
-# 2. Lock the held-out test set (one-time; refuses to overwrite an existing lock)
-docker compose run --rm backend python /scripts/generate_dataset.py --seed 42 --n-cases 50000 --lock
-
-# 3. Start Postgres + FastAPI (runs Alembic migrations automatically on boot)
 docker compose up -d --build
+```
 
-# 4. Load train + validation into Postgres (safe to rerun any time)
-docker compose run --rm backend python /scripts/load_database.py
+That starts Postgres and the FastAPI backend and runs migrations automatically. The dataset needs generating and loading once per checkout:
 
-# 5. (optional) also load the locked test split, sourced from data/locked/test/
+```bash
+docker compose run --rm backend python /scripts/generate_dataset.py --seed 42 --n-cases 50000
+docker compose run --rm backend python /scripts/generate_dataset.py --seed 42 --n-cases 50000 --lock
 docker compose run --rm backend python /scripts/load_database.py --splits train validation test
-
-# 6. Verify the lock hasn't drifted
-docker compose run --rm backend python /scripts/verify_dataset.py
-
-# 7. Run tests
-docker compose run --rm backend pytest -v
 ```
 
-A `Makefile` wraps all of these (`make up`, `make generate`, `make lock`, `make load`, `make load-all`, `make verify`, `make test`).
+(A `Makefile` wraps all of this: `make up`, `make generate`, `make lock`, `make load-all`.)
 
-The API is then at `http://localhost:8001` (interactive docs at `/docs`). Port 8001 (not 8000) and Postgres on 5433 (not 5432) are used to avoid clashing with other local projects — see `docker-compose.yml`.
-
-## Environment variables
-
-See `.env.example`. Key ones:
-
-| Variable | Purpose |
-|---|---|
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Postgres credentials, shared by `db` and `backend` services |
-| `API_DEFAULT_PAGE_SIZE` / `API_MAX_PAGE_SIZE` | Pagination bounds for `GET /cases` |
-| `DATASET_SEED` / `DATASET_N_CASES` | Reference values for dataset generation (also passed as CLI flags) |
-
-## Database
-
-PostgreSQL, five tables, FK-linked: `customers → transactions → disputes → {evidence, outcomes}`. `disputes` is the "case" table referenced throughout the API — see [docs/phase1.md](docs/phase1.md) for the full schema and why evidence is normalized into typed rows instead of a JSON blob.
-
-Schema is managed with **Alembic** (`backend/alembic/`); migrations run automatically when the `backend` container starts (`alembic upgrade head`).
-
-## Synthetic dataset
-
-~50,000 chargeback cases across four scenario archetypes, generated by `scripts/generate_dataset.py`.
-
-## Scenario archetypes
-
-| Archetype | Share | Target favorable-outcome rate |
-|---|---|---|
-| `strong_legitimate` | ~35% | 85–95% |
-| `weak` | ~30% | 10–20% |
-| `ambiguous` | ~20% | 45–60% |
-| `high_value_strong` | ~15% | 80–90% |
-
-These are **target distributions**, not deterministic rules — every case's outcome is sampled from a latent logistic-regression-style probability built from many noisy, weakly-correlated signals (authentication strength, fulfillment evidence, customer history, evidence completeness, reason code, amount, communication signals) plus Gaussian noise. No single feature determines the label. Full model in [docs/phase1.md](docs/phase1.md).
-
-## Data generation methodology
-
-Evidence relevance is reason-code-aware (e.g. 3DS/AVS/CVV matter for `unauthorized_transaction`, delivery proof matters for `goods_not_received`, order/refund history matters for `duplicate_charge`) and is stored per evidence row via a `relevance` field, so Phase 2's evidence-matrix builder can weight signals correctly without any schema change. Realistic missingness is simulated per evidence type. See [docs/phase1.md](docs/phase1.md) for the full probability model.
-
-## Train/validation/test split
-
-70/15/15, split at the **customer** level (not the case level) — every customer's cases fall entirely within one split — so there's no historical leakage of a customer's behavior across splits.
-
-## Locked test set
-
-`data/locked/test/` is generated once and frozen. `data/metadata/locked_test_metadata.json` records the generation seed, creation timestamp, per-table row counts, schema version, and a SHA-256 checksum over the CSVs. `scripts/generate_dataset.py --lock` refuses to overwrite an existing lock unless `--force-relock` is passed explicitly. `scripts/load_database.py` only ever loads the test split from `data/locked/test/`, never from `data/generated/test/`, so a routine dataset regeneration can never silently change what Phase 2 evaluates against. `scripts/verify_dataset.py` re-checks the checksum, row counts, schema, duplicate IDs, and relational integrity on demand.
-
-## API endpoints
-
-| Method | Path | Status |
-|---|---|---|
-| GET | `/health` | implemented |
-| GET | `/cases` | implemented (pagination, `reason_code`/`status` filters) |
-| GET | `/cases/{case_id}` | implemented (dispute + transaction + customer) |
-| GET | `/cases/{case_id}/evidence` | implemented |
-| POST | `/cases/{case_id}/score` | **implemented (Phase 2)** — calibrated winnability + SHAP factors |
-| POST | `/cases/{case_id}/decision` | **implemented (Phase 3)** — cost-sensitive CONTEST / HUMAN_REVIEW / DO_NOT_CONTEST |
-| POST | `/cases/{case_id}/draft` | **501** stub — Phase 4 |
-
-## Running tests
-
-```bash
-docker compose run --rm backend pytest -v
-```
-
-Covers: health check, case listing/filtering/pagination, case detail, evidence retrieval, 404s, the remaining stubs, and (Phase 2) feature determinism, target-leakage guards, split integrity, model/calibration/SHAP behavior, and the `/score` contract. Dataset-level checks (row counts, schema, distributions, duplicates, reproducibility, lock integrity) are covered by `scripts/verify_dataset.py`.
-
-The Phase 2 tests skip cleanly if the dataset has not been generated or the model has not been trained in a given checkout.
-
-## Data strategy (hybrid)
-
-Three data categories, kept strictly separate and never merged:
-
-| Directory | Category | Purpose |
-|---|---|---|
-| `data/generated/`, `data/locked/test/` | Synthetic ML dataset (unchanged from above) | Model training/validation/locked evaluation |
-| `data/reference/` | Public domain reference data (reason codes, evidence requirements, sourced from Stripe/Visa/Verifi public documentation, with full provenance in `data/reference/sources.json`) | Grounds the generator's assumptions; future Phase 4 RAG corpus. **Not training data, not labels.** |
-| `data/external/` | External real-world benchmark, if one is ever added | Out-of-distribution check only — never merged into training/eval |
-
-Validate the reference layer with `python scripts/verify_reference_data.py` (or `make verify-reference`). See [docs/data_strategy.md](docs/data_strategy.md) for the full rationale and [docs/external_data.md](docs/external_data.md) for what external datasets were investigated and why none were merged in. `data/metadata/data_manifest.json` is the machine-readable index across all three categories.
-
-## Phase 2 — risk engine (LightGBM + calibration + SHAP)
-
-Phase 2 adds the winnability model behind `POST /cases/{id}/score`. It predicts **P(favorable outcome | evidence)** for a dispute and explains the prediction with SHAP. It is decision *support*: it does not recommend contesting (Phase 3) and never submits anything.
-
-| | |
-|---|---|
-| Model | LightGBM binary classifier (94 features, 212 rounds, regularization-leaning) |
-| Explainability | SHAP (`TreeExplainer`, exact TreeSHAP), cross-checked against LightGBM's native `pred_contrib` |
-| Calibration | **Platt scaling (sigmoid)**, selected by cross-fitted out-of-fold Brier on validation |
-| Model version | `risk-v1` / feature schema `features-v1` |
-| Operating threshold | 0.44 (F1-max on validation; never tuned on the locked test set) |
-
-### Canonical commands
-
-```bash
-# Audit the dataset before modeling (fails loudly on leakage / split problems)
-python scripts/audit_model_data.py
-
-# Train the model  -- deterministic: same data + seed 42 -> byte-identical artifacts
-python scripts/train_model.py
-
-# Evaluate on validation, against the evidence-completeness baseline
-python scripts/evaluate_model.py
-
-# Assess probability calibration (Brier / ECE / reliability curve)
-python scripts/evaluate_calibration.py
-
-# OFFICIAL final evaluation on the locked test set (read-only, checksum-guarded)
-python scripts/evaluate_locked_test.py
-
-# Where the model gets it wrong, and for whom
-python scripts/error_analysis.py
-```
-
-Inside Docker, prefix with `docker compose run --rm backend python /scripts/...`, or use the Make targets: `make audit`, `make train`, `make evaluate`, `make evaluate-calibration`, `make evaluate-locked-test`, `make error-analysis`, or `make model-all` to run the whole pipeline in order.
-
-### Results
-
-Locked held-out test set (n=7,446), calibrated, at threshold 0.44 — compared against the **strongest** of three evidence-completeness baselines:
-
-| | ROC-AUC | PR-AUC | Precision | Recall | F1 | Brier |
-|---|---|---|---|---|---|---|
-| Best baseline | 0.7579 | 0.7987 | 0.8088 | 0.7375 | 0.7715 | 0.2094 |
-| **DisputeWise model** | **0.8990** | **0.9334** | **0.8589** | **0.8705** | **0.8647** | **0.1217** |
-
-Validation ROC-AUC is 0.8996 — within 0.001 of locked test, indicating no overfitting.
-
-### Model artifacts
-
-Artifacts live in `artifacts/` and are **fully reproducible** from committed code and data:
-
-```
-artifacts/models/       risk_model.txt, feature_schema.json, model_config.json,
-                        calibrator.json, training_metrics.json
-artifacts/evaluation/   validation_metrics.json, locked_test_metrics.json,
-                        calibration_report.json, error_analysis_*.json, data_audit.json
-```
-
-To rebuild every artifact from scratch: `make train` (then `make evaluate evaluate-calibration evaluate-locked-test error-analysis`). Training is deterministic, so a rebuild reproduces `risk_model.txt` byte-for-byte. If artifacts are absent, `/score` returns **503** with the remediation command rather than failing opaquely.
-
-Detailed technical notes — feature groups, the layered leakage defenses, calibration method selection, error analysis, and an honest limitations list — are in [docs/phase2.md](docs/phase2.md).
-
-## Phase 3 — cost-sensitive decision engine
-
-Phase 3 adds `POST /cases/{id}/decision`: it takes Phase 2's calibrated probability and asks whether contesting is economically worth it. Returns **CONTEST**, **HUMAN_REVIEW**, or **DO_NOT_CONTEST** with a full, auditable expected-value breakdown. **Decision support only — no dispute is ever submitted, contested, or acted on automatically.**
-
-| | |
-|---|---|
-| Decision policy version | `decision-v1` |
-| Primary signal | expected net value (`P(win) × recoverable_amount − contest_cost`), gated by model confidence |
-| Cost defaults | `contest_cost=₹300`, `recovery_rate=1.0` — **prototype assumptions, not verified Razorpay economics** (see docs/phase3.md) |
-| Evidence-aware routing | a CONTEST recommendation is downgraded to HUMAN_REVIEW if high-relevance evidence for the reason code is missing on file |
-| Config overrides | any field, via `DISPUTEWISE_<FIELD>` env vars (e.g. `DISPUTEWISE_CONTEST_COST=450`) |
-
-### Canonical commands
-
-```bash
-# Decision policy on validation, vs. three baselines (contest-everything /
-# probability-threshold / evidence-completeness) -- policy is NOT tuned on test
-python scripts/evaluate_decisions.py
-
-# OFFICIAL final decision evaluation on the locked test set (read-only, checksum-guarded)
-python scripts/evaluate_locked_decisions.py
-```
-
-Inside Docker: `docker compose run --rm backend python /scripts/...`, or `make evaluate-decisions`, `make evaluate-locked-decisions`, `make decision-all`.
-
-### Results (locked test, n=7,446)
-
-| Bucket | Volume | Actual favorable-outcome rate |
-|---|---|---|
-| CONTEST | 27.2% (n=2,027) | **91.2%** |
-| HUMAN_REVIEW | 50.6% (n=3,765) | 66.2% |
-| DO_NOT_CONTEST | 22.2% (n=1,654) | 16.6% |
-
-Bucket sizes and rates closely match validation (26.3% / 90.7%, 50.8% / 66.2%, 22.9% / 16.9%) — the policy is not overfit. The policy correctly separates cases by actual outcome, and honestly routes ambiguous ones (economics and/or confidence unclear) to a human instead of guessing.
-
-**One honest finding worth surfacing rather than hiding:** under the default (tiny) `contest_cost`, a naive "contest everything" baseline captures *more* total realized value than our confidence-gated policy on this dataset — because almost every case clears the economic bar, so our policy's `high_confidence_probability=0.65` threshold, not the economics, is what's actually limiting CONTEST volume. This is reported as-is in [docs/phase3.md](docs/phase3.md) rather than adjusted after the fact to look better; it's a real, actionable signal about which threshold to tune once real operational cost data exists.
-
-Full economic-assumption transparency (what's observed data vs. model output vs. prototype assumption), the policy's exact threshold logic, break-even/sensitivity analysis, and the full baseline comparison are in [docs/phase3.md](docs/phase3.md).
-
-## Phase 4 — evidence intelligence, grounded RAG & claim-level verification
-
-Phase 4 answers: *if we're contesting, what evidence do we have, what does authoritative guidance say, and can every sentence of a generated response be traced back to real evidence?* Not a generic RAG chatbot — a case-centric pipeline where an LLM's output is never trusted until a deterministic verifier checks every claim against the case's own evidence.
-
-```
-evidence gap analyzer → evidence packet → RAG retrieval (TF-IDF over data/reference/)
-    → grounded generation (strict schema, explicit valid-ID list)
-    → claim-level verifier (deterministic) → DRAFT_READY / DRAFT_FLAGGED / DRAFT_BLOCKED
-```
-
-| | |
-|---|---|
-| New endpoints | `POST /cases/{id}/evidence-gap`, `/evidence-packet`, `/draft` (now real), `/verify` |
-| Knowledge base | `knowledge-v1` — 51 chunks, deterministically built from `data/reference/`, TF-IDF ranked (no vector DB, no embedding model) |
-| LLM provider | **OpenRouter** (free tier), `nvidia/nemotron-3-super-120b-a12b:free` — verified tool-calling-capable via OpenRouter's live model catalog, not guessed. Anthropic kept available (`LLM_PROVIDER=anthropic`) but not used for the demo. **No key configured in this environment**; `/draft` returns `GENERATION_UNAVAILABLE` (HTTP 200, decision/gap/retrieval still fully populated) rather than a 503 |
-| Safety | any `UNSUPPORTED`/`INVALID_REFERENCE` claim blocks the **entire** response — never averaged away by good claims |
-
-### Canonical commands
-
-```bash
-python scripts/evaluate_evidence_intel.py   # 8-case deterministic benchmark (no API key needed)
-```
-
-Inside Docker: `make evaluate-evidence-intel`.
-
-### Adversarial safety (mandatory demonstration)
-
-Every required hallucination scenario is a deterministic, reproducible test in `tests/test_adversarial_grounding.py`: fabricated delivery date, missing evidence cited as present, contradictory timestamps, cross-case evidence contamination, nonexistent evidence ID, guaranteed-win language, and a fabricated policy citation — every one resolves to `UNSUPPORTED` or `INVALID_REFERENCE`, and a single bad claim blocks an otherwise-good draft (`test_end_to_end_mixed_draft_is_blocked_by_a_single_bad_claim`).
-
-### Evaluation (8-case controlled benchmark)
-
-Gap-detection accuracy 100%, retrieval reason-code relevance 100%, required-guidance hit rate 100%, blocked-prediction accuracy 100% (8/8). Full numbers, the FACT/REFERENCE/INFERENCE/UNSUPPORTED distinction, exact OpenRouter setup steps, and an honest limitations section (regex-based date/guarantee checks, no live-verified provider call in this environment, no semantic/NLI layer) are in [docs/phase4.md](docs/phase4.md).
-
-**Never implemented, by design: automatic submission of anything, to anyone, ever.** Human approval remains mandatory for every draft, regardless of `response_state`.
-
-## Frontend — Risk Command Center
-
-A React + TypeScript + Vite + Tailwind merchant-facing console (`frontend/`) covering the Dispute Inbox and Case Intelligence views, wired to the real `/cases`, `/cases/{id}`, `/cases/{id}/evidence`, `/score`, and `/decision` endpoints — no backend code was modified to build it.
+Then run the frontend separately:
 
 ```bash
 cd frontend
 npm install
-npm run dev   # http://localhost:5173 -- requires the backend running (see above)
+npm run dev
 ```
 
-Full setup, manual-testing walkthrough (demo case IDs per decision bucket, testing missing evidence / API failure / unknown cases), and architecture notes are in [docs/frontend.md](docs/frontend.md).
+| | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8001 |
+| Interactive API docs | http://localhost:8001/docs |
+| PostgreSQL | `localhost:5433` (mapped from the container's 5432, to avoid clashing with other local Postgres instances) |
 
-## Phases 5-8 — decision workspace, simulation, portfolio & provenance
+Response generation (`POST /cases/{id}/draft`) works fully without any key configured — it returns `GENERATION_UNAVAILABLE` (HTTP 200, decision/evidence/retrieval still fully populated) rather than an error. To enable live generation, get a free key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) and set `OPENROUTER_API_KEY` in `.env`.
 
-Everything below reuses the frozen Phase 1-4 engines. No phase reimplements feature
-engineering, probability math, decision thresholds, or verification rules.
+Run tests:
 
-| Phase | What | Endpoint(s) | Docs |
-|---|---|---|---|
-| 5 | Risk Command Center frontend (inbox + case workspace: overview / decision / evidence / response / audit) | — | [docs/frontend.md](docs/frontend.md) |
-| 6 | New-dispute simulation (hypothetical case, never persisted) | `POST /simulate` | [docs/phase6.md](docs/phase6.md) |
-| 7A | Evidence scenario analysis ("what if this evidence were added/removed?") | `POST /cases/{id}/evidence-scenario` | below |
-| 7B | Decision policy playground (hypothetical economics, portfolio re-routing) | `POST /policy/simulate`, `GET /policy/default` | below |
-| 7C | Portfolio risk view (server-side aggregation) | `GET /portfolio/summary` | below |
-| 7D | Case provenance trail | — (composed from existing responses) | below |
-| 8 | Free LLM provider evaluation + failure classification | — | [docs/phase8-llm-provider.md](docs/phase8-llm-provider.md) |
+```bash
+docker compose run --rm backend pytest -q
+cd frontend && npx vitest run
+```
 
-### Simulation and scenario analysis (6, 7A)
+## 14. API
 
-Both run a hypothetical through the **same** pipeline as a real case:
-`score_parts()` → `risk-v1` + calibration → `decision-v1` → `evidence-v1` gap → `knowledge-v1`
-retrieval → (opt-in) generation + `verifier-v1.1`.
+All endpoints below exist in the running application (verified against the live OpenAPI schema).
 
-- **No target leakage.** Both request models are `extra="forbid"` and additionally refuse every
-  name in `FORBIDDEN_COLUMNS` explicitly, so an outcome field is a named 422 rather than a
-  silently ignored key. Neither model has a field describing a dispute's result.
-- **No persistence.** `simulation_service` takes no `Session` and imports no ORM model.
-  Scenario analysis works on detached, frozen copies of evidence rows, so no modified object
-  exists for SQLAlchemy to flush. Asserted by comparing the stored row, table counts, and the
-  case's own `/score` before and after.
-- **Scenario analysis is not causal inference.** Two model evaluations under two evidence
-  states — not an estimate of what obtaining the evidence would cause. The API says so and the
-  UI repeats it verbatim.
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness check |
+| GET | `/cases` | List/filter/paginate cases |
+| GET | `/cases/{id}` | Case, transaction, and customer detail |
+| GET | `/cases/{id}/evidence` | Raw evidence rows for a case |
+| POST | `/cases/{id}/score` | Calibrated winnability + SHAP factors |
+| POST | `/cases/{id}/decision` | CONTEST / HUMAN_REVIEW / DO_NOT_CONTEST + economics |
+| POST | `/cases/{id}/evidence-gap` | Required vs. available evidence for this case's reason code |
+| POST | `/cases/{id}/evidence-packet` | The structured, LLM-safe evidence view |
+| POST | `/cases/{id}/draft` | Grounded response generation + verification |
+| POST | `/cases/{id}/verify` | Independently verify a set of claims |
+| POST | `/cases/{id}/evidence-scenario` | Evidence what-if analysis for a real case |
+| POST | `/simulate` | Score a fully hypothetical dispute |
+| GET | `/policy/default` | The production decision policy's parameters |
+| POST | `/policy/simulate` | Re-route the portfolio under a hypothetical policy |
+| GET | `/portfolio/summary` | Server-side portfolio aggregation |
 
-### Policy playground (7B)
+Full request/response schemas are in the interactive docs at `/docs` once the backend is running.
 
-A UI around the existing engine. It builds a throwaway `DecisionConfig` and hands it to the same
-`batch_decide()` / `summarize_buckets()` the offline evaluation scripts use — no threshold or
-expected-value math is duplicated in the service or the frontend. `decision-v1` is never mutated
-(asserted identical after a run), and the evidence gate is deliberately **not** tunable: it is
-safety behavior, not an economic dial.
+## 15. Testing
 
-**Policy sensitivity is surfaced, not tuned away.** On the validation split at the prototype
-₹300 contest cost, contest-everything captures ₹10.35M realized net vs the default policy's
-₹5.40M — because even the 16.9%-favorable `DO_NOT_CONTEST` bucket is worth filing when a
-dispute is worth thousands and filing costs ₹300. Raise the cost to ₹5,000 and it inverts:
-contest-everything collapses to **−₹24.6M** while the policy holds at **+₹5.40M**. The model
-separates the buckets cleanly either way (90.7% vs 16.9% favorable); what changes is whether
-the cost assumption makes routing worth doing.
+Run the full backend suite:
 
-### Portfolio view (7C)
+```bash
+docker compose run --rm backend pytest -q
+```
 
-Server-side aggregation under the production policy: totals, decision routing with amount at
-risk, and breakdowns by reason code, probability band and evidence completeness. A test
-enumerates metric keys the dataset cannot support (SLA, throughput, recovery-to-date, trends)
-and fails if any is reintroduced; a missing dataset returns 503 rather than an empty-but-
-plausible portfolio.
+Covers: API contract tests per endpoint, ML feature determinism and target-leakage guards, customer-level split integrity, locked-dataset checksum verification, the evidence gap analyzer and retriever, the deterministic claim verifier (including the full adversarial hallucination suite), simulation and evidence-scenario no-persistence guarantees, policy-playground isolation from the production config, and portfolio aggregation correctness.
 
-7B and 7C both use the **validation** split and never the locked test set — moving thresholds
-while watching held-out outcomes would be tuning against the benchmark. Every response states
-its split and labels realized figures as retrospective.
+Frontend:
 
-### Provenance trail (7D)
+```bash
+cd frontend && npx vitest run
+```
 
-`case → features-v1 → risk-v1 → probability → decision-v1 → decision → evidence-v1 gap →
-knowledge-v1 retrieval → prompt-v1.1 → claims → verifier-v1.1 → human approval boundary`
+Test counts change as the project grows — run the commands above for the current numbers rather than trusting a number in this document.
 
-Each stage carries an explicit status (COMPLETE / NOT RUN / UNAVAILABLE / FAILED / BLOCKED) and
-the identifiers it referenced (source IDs, chunk IDs, cited evidence IDs, claim IDs, per-claim
-verification state). A stage that did not run reports NOT RUN and **no version string** —
-generation that was never requested cannot show a prompt or verifier version. This is a
-reproducibility record, not model reasoning: chain-of-thought is never requested, stored or
-rendered.
+## 16. Repository structure
 
-## Known limitations
+```
+disputewise/
+├── backend/
+│   ├── app/
+│   │   ├── api/              FastAPI routers, one module per resource
+│   │   ├── services/         orchestration: scoring, decision, evidence intel, simulation, scenario, policy, portfolio
+│   │   ├── ml/                feature builder, model, calibration, SHAP
+│   │   ├── decision/          decision policy + config
+│   │   ├── evidence_intel/    gap analyzer, packet, retrieval, prompt, verifier, LLM provider
+│   │   ├── simulation/        hypothetical-case and evidence-scenario builders
+│   │   ├── models/            SQLAlchemy ORM models
+│   │   └── schemas/           Pydantic request/response schemas
+│   ├── alembic/               DB migrations
+│   └── tests/
+├── frontend/
+│   └── src/
+│       ├── api/                typed client, one module per resource
+│       ├── components/         case/, simulation/, layout/, common/
+│       ├── pages/               inbox, case workspace, simulation, portfolio, policy playground
+│       └── hooks/
+├── scripts/                    dataset generation, training, evaluation, verification
+├── data/                       see §12
+├── artifacts/                  reproducible model + evaluation artifacts
+├── docs/                       engineering-depth documentation (see below)
+└── docker-compose.yml
+```
 
-Stated plainly, because each is a real constraint on how the results should be read.
+## 17. Limitations
 
-- **Synthetic data.** All 50,000 cases are generated. Metrics measure the model against a
-  known generative process, not real chargeback outcomes.
-- **The 8-case evidence benchmark is a constructed benchmark**, not a real-world
-  hallucination-rate estimate. 100% on it means 8/8 constructed scenarios behaved as specified.
-- **Contest cost (₹300) and recovery rate (1.0) are prototype assumptions**, not verified
-  production economics. See the policy sensitivity above.
-- **Simulation evidence strength uses distribution midpoints** (0.8 corroborating / 0.25
-  unhelpful) because the dataset draws strength randomly and a simulation must be reproducible.
-- **Simulation timestamps use a fixed anchor** — features consume only differences between
-  timestamps, so absolute time is irrelevant to scoring and fixing it makes runs reproducible.
-- **Verifier date/guarantee checks are regex-based.** There is no NLI or semantic entailment
-  layer; the verifier checks citations, availability, and textual patterns deterministically.
-- **Scenario analysis is not causal inference** (see above).
-- **Model performance varies substantially within archetypes** — the headline metrics are
-  portfolio-level.
-- **Free LLM endpoints are unreliable.** Generation can be unavailable at any moment; the
-  product degrades safely and says so rather than showing a stale or fabricated draft.
+- **Synthetic dataset.** All 50,000 cases are generated, not real merchant data. Metrics measure the model against a known generative process.
+- **The 8-case evidence benchmark is a constructed benchmark**, not a real-world hallucination-rate estimate. 100% on it means 8/8 constructed scenarios behaved as specified — nothing more.
+- **Contest cost (₹300) and recovery rate (1.0) are prototype assumptions**, not verified production economics (see §7's sensitivity finding).
+- **Simulation evidence strength uses distribution midpoints**, not a random draw, because a simulation needs to be reproducible.
+- **Simulation timestamps use a fixed anchor** — features consume only differences between timestamps, so this doesn't affect scoring.
+- **Verifier date/guarantee checks are regex-based.** There is no NLI or semantic-entailment layer; checks are deterministic but pattern-based.
+- **Scenario analysis is not causal inference** (§10).
+- **Model performance varies substantially within archetypes** — the headline metrics are portfolio-level.
+- **Free LLM endpoints are unreliable.** Generation can be unavailable at any moment; the product degrades safely and says so rather than showing a stale or fabricated draft. A second free model (Gemma) was evaluated and not adopted after repeated HTTP 429s from its provider — see [docs/phase8-llm-provider.md](docs/phase8-llm-provider.md).
+- **No automatic evidence ingestion from a live merchant/payment system** — cases are read from the dataset already loaded into Postgres.
 
-## Phase 1 exit criteria
+## 18. Roadmap
 
-- [x] Docker Compose starts Postgres + FastAPI
-- [x] Schema created via Alembic migration
-- [x] ~50,000 synthetic cases generated, four archetypes at target proportions
-- [x] Outcomes are probabilistic (latent logistic model + noise), not deterministic
-- [x] Realistic missingness and overlapping feature distributions
-- [x] 70/15/15 customer-level split
-- [x] Test set locked with checksum + metadata
-- [x] Generation is reproducible for a fixed seed (fixed reference clock — see docs/phase1.md)
-- [x] No duplicate IDs; relational integrity holds
-- [x] `/health`, `/cases`, `/cases/{id}`, `/cases/{id}/evidence` work
-- [x] `/score`, `/decision`, `/draft` returned explicit 501s *(`/score` is now implemented — see Phase 2 above)*
-- [x] Tests pass
+- Validation against a real or licensed anonymized merchant benchmark.
+- A stronger semantic/NLI verification layer alongside the current deterministic checks.
+- Production evidence ingestion from a live merchant platform.
+- Richer, network- and processor-specific cost models (replacing the flat contest-cost assumption).
+- A human-feedback loop that informs future threshold/policy choices.
+- Production observability (structured logging, tracing) beyond what's needed for local development.
 
-## Phase 2 exit criteria
+## 19. Security / defense-only
 
-- [x] Phase 1 locked test set remains byte-identical (checksum `e1e8cd50…93b5c`)
-- [x] Existing Phase 1 tests still pass
-- [x] Data audit, feature pipeline, and leakage tests implemented
-- [x] Customer-level split integrity verified (train/validation/test pairwise disjoint)
-- [x] LightGBM model trained, versioned, and deterministically reproducible
-- [x] Probability calibration implemented and assessed
-- [x] SHAP explanations + human-readable evidence language implemented
-- [x] `/score` returns calibrated probability, model version, and SHAP factors
-- [x] Locked-test evaluation, baseline comparison, and error analysis implemented
+DisputeWise is **defense-only** by construction:
 
-**RAG, LLM drafting, and the frontend are intentionally not implemented yet.** They are Phase 4–5 scope. `POST /cases/{id}/draft` remains a deliberate 501 stub.
+- No automatic dispute submission, to any network or processor.
+- No autonomous action directed at a customer.
+- No payment-network manipulation of any kind.
+- No external side effects — every endpoint reads or computes; nothing calls out except the optional, explicitly-configured LLM provider.
+- Human approval is a structural boundary (§9, §2), not a UI convention that could be skipped.
 
-## Phase 3 exit criteria
+## 20. License
 
-- [x] Decision configuration implemented and validated (contest_cost, recovery_rate, thresholds; env-overridable)
-- [x] Expected recovery, expected net value, and break-even probability implemented and unit-tested
-- [x] Three-way decision policy implemented (CONTEST / HUMAN_REVIEW / DO_NOT_CONTEST), primary signal is expected net value, gated by model confidence
-- [x] HUMAN_REVIEW boundary (`review_margin`) implemented -- near-zero EV is always routed to review
-- [x] Deterministic, template-generated explanations for every decision (no LLM)
-- [x] Evidence-aware routing: a documented, one-directional override (CONTEST → HUMAN_REVIEW only) when high-relevance evidence is missing
-- [x] Sensitivity analysis + break-even probability exposed as an explainability surface (never changes the decision)
-- [x] `POST /cases/{id}/decision` implemented, with `model_version` / `feature_schema_version` / `decision_policy_version` on every response
-- [x] Validation decision evaluation + baseline comparison (contest-everything / probability-threshold / evidence-completeness) implemented, reported honestly
-- [x] Official locked-test decision evaluation implemented (checksum-guarded before and after; policy never tuned on test)
-- [x] Phase 1 locked test set remains byte-identical (checksum `e1e8cd50…93b5c`)
-- [x] All Phase 1 + Phase 2 tests still pass
+No license file is currently included in this repository. All rights reserved by default until one is added.
 
-**RAG, embeddings, a vector database, LLM drafting, automatic submission, customer notifications, and the frontend are intentionally not implemented here.** They followed in Phase 4 (RAG/generation/verification) and the separately-developed frontend.
+---
 
-## Phase 4 exit criteria
+## Documentation
 
-- [x] Evidence Gap Analyzer implemented (reason-code + case evidence + `data/reference/`, no hardcoded per-case logic)
-- [x] Evidence Packet implemented (narrow, LLM-safe; excludes raw PII and all outcome/target fields structurally)
-- [x] Reference-data provenance preserved (every gap item and knowledge chunk carries `source_id`/`source_name`/`source_url`)
-- [x] RAG knowledge base implemented (`knowledge-v1`, 51 deterministic chunks from `data/reference/`, TF-IDF ranked, no vector DB / embedding model / paid API)
-- [x] Retrieval implemented (reason-code filter before ranking; query built from the case's actual evidence gaps)
-- [x] LLM provider abstraction implemented (`LLMProvider` interface, `AnthropicLLMProvider`, `FakeLLMProvider`; app runs fully without an API key)
-- [x] Structured grounded generation implemented (forced tool-use, strict Pydantic-validated schema)
-- [x] Claim-level verifier implemented (7 deterministic checks, no LLM self-grading)
-- [x] Unsupported claims BLOCK a response (`DRAFT_BLOCKED` on any `UNSUPPORTED`/`INVALID_REFERENCE` claim — never averaged away)
-- [x] Adversarial hallucination tests implemented (every required scenario in `tests/test_adversarial_grounding.py`)
-- [x] API endpoints implemented (`evidence-gap`, `evidence-packet`, `draft`, `verify`) without breaking Phase 1-3 contracts
-- [x] Version metadata implemented (6 version strings, on every response + the trace)
-- [x] Evaluation implemented (8-case controlled benchmark, `scripts/evaluate_evidence_intel.py`)
-- [x] Full test suite passes (307/307: 179 Phase 1-3 + 128 Phase 4, incl. OpenRouter provider tests)
-- [x] Phase 1-3 tests remain green, unmodified except 3 stub-inversions following the established Phase 2/3 pattern
-- [x] Locked test checksum unchanged (`e1e8cd50…93b5c`)
-- [x] No API keys/secrets committed
-- [x] `docs/phase4.md` complete
-- [x] No automatic submission anywhere; human approval always required
+README = product overview. Engineering depth lives in `docs/`:
 
-**RAG, embeddings, a vector database, LLM drafting, and claim-level verification are now implemented (Phase 4).** Only the frontend for these new views, and any future phases, remain outside this backend's scope.
+| Doc | Covers |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System architecture, service boundaries, data flow |
+| [docs/evaluation.md](docs/evaluation.md) | Evaluation methodology, splits, metrics, baselines, limitations |
+| [docs/data_strategy.md](docs/data_strategy.md) | Why three data categories, and how they relate |
+| [docs/external_data.md](docs/external_data.md) | What external datasets were investigated, and why none were merged in |
+| [docs/phase1.md](docs/phase1.md) | Data generation methodology, schema, reproducibility |
+| [docs/phase2.md](docs/phase2.md) | Feature engineering, leakage defenses, model, calibration, SHAP |
+| [docs/phase3.md](docs/phase3.md) | Decision policy, economics, sensitivity analysis |
+| [docs/phase4.md](docs/phase4.md) | Evidence intelligence, RAG, generation, the verifier |
+| [docs/phase6.md](docs/phase6.md) | Simulation architecture |
+| [docs/phase8-llm-provider.md](docs/phase8-llm-provider.md) | LLM provider evaluation and live-verified status |
+| [docs/frontend.md](docs/frontend.md) | Frontend setup, routing, manual testing walkthrough |

@@ -139,7 +139,9 @@ Phase 1–3 contracts are unchanged and regression-tested: `GET /cases`, `GET /c
 3. `docker compose up -d --build` (or just restart the `backend` service if it's already running) so the container picks up the new environment variable.
 4. `curl -s -X POST http://localhost:8001/cases/DSP-031597/draft | python3 -m json.tool` — `response_state` should now be `DRAFT_READY`, `DRAFT_FLAGGED`, or `DRAFT_BLOCKED` (a real generation happened) instead of `GENERATION_UNAVAILABLE`.
 
-**No key is configured in this development environment** (verified: `env | grep -i -E "openrouter|anthropic"` returns nothing), so every live check in this document used `FakeLLMProvider` or exercised the `GENERATION_UNAVAILABLE` path. `OpenRouterLLMProvider`'s HTTP request/response handling is fully exercised in `tests/test_llm_provider.py` against `httpx.MockTransport` (a fake in-process transport — real request-building and response-parsing code paths, zero network calls), but has not been exercised against OpenRouter's live network endpoint in this environment.
+**No key was configured when this document was written**, so every live check below used `FakeLLMProvider` or exercised the `GENERATION_UNAVAILABLE` path. `OpenRouterLLMProvider`'s HTTP request/response handling is fully exercised in `tests/test_llm_provider.py` against `httpx.MockTransport` (a fake in-process transport — real request-building and response-parsing code paths, zero network calls).
+
+A key was configured later, and the live path (including real failure modes returned by the provider) is exercised end-to-end — see [docs/phase8-llm-provider.md](phase8-llm-provider.md) for the current, live-verified status and the exact model-availability evidence.
 
 ### Model selection (verified, not guessed)
 

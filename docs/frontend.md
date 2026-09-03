@@ -132,6 +132,10 @@ src/
                  taxonomy -- no invented "Payment"/"Other" bucket), demoCases.ts
 ```
 
+### Routes beyond the case workspace
+
+`/simulation` (new-dispute simulation), `/risk` (portfolio view), and `/playground` (policy playground) round out the routes referenced above — named to avoid the same proxy-prefix collision as `/case/:id` (`/simulate`, `/portfolio`, and `/policy` are all proxied API prefixes; see "Why a proxy" above). Their API modules live at `src/api/simulation.ts`, `src/api/scenario.ts`, and `src/api/portfolio.ts`. The evidence-scenario "what if this evidence changed?" panel (`EvidenceScenarioPanel`) is rendered on the case Evidence tab, directly below `EvidenceGapPanel`.
+
 ### Case tab layout
 
 `/case/:caseId/*` is a nested route under `CaseLayout`, which fetches case detail, `/score`, and `/decision` once and shares them with its child route (`useOutletContext`) — Overview, Decision, Evidence, Response, and Audit are separate route components, not a single flat page. Each tab that needs its own resource (evidence-gap, evidence-packet, draft) fetches it independently via the hooks in `useCaseWorkspace.ts`; because `useAsyncResource` caches by a `resource:caseId` key at module scope, switching tabs never re-fetches something already loaded — including score/decision/case, which the layout and no other component re-requests.
