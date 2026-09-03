@@ -315,6 +315,14 @@ export interface ClaimVerification {
 
 export type ResponseState = 'DRAFT_READY' | 'DRAFT_FLAGGED' | 'DRAFT_BLOCKED' | 'GENERATION_UNAVAILABLE'
 
+/**
+ * Why generation produced no draft, when it produced none. Additive to
+ * `response_state` (which keeps its Phase 4 meaning): it lets the UI tell an
+ * LLM outage apart from a verifier rejection, since the backend reports both
+ * as DRAFT_BLOCKED. Null when a draft exists or generation was not attempted.
+ */
+export type GenerationErrorKind = 'provider_unavailable' | 'invalid_output' | null
+
 export interface DecisionSummary {
   decision: Decision
   calibrated_probability: number
@@ -369,6 +377,7 @@ export interface DraftResponse {
   claim_verifications: ClaimVerification[]
   response_state: ResponseState
   response_state_reason: string
+  generation_error_kind: GenerationErrorKind
 
   trace: ResponseTrace
   disclaimer: string

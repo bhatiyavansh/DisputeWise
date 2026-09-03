@@ -20,7 +20,36 @@ from app.evidence_intel.retrieval import RetrievalResult
 
 
 class LLMOutputError(RuntimeError):
-    """The provider responded, but its output didn't match the required schema."""
+    """No usable draft was produced.
+
+    Deliberately the single type callers handle: every failure below it means
+    "there is no draft", and the response_state contract treats them
+    identically (DRAFT_BLOCKED) -- that behavior is unchanged.
+    """
+
+
+class ProviderUnavailableError(LLMOutputError):
+    """The provider could not be reached, refused, or returned no usable
+    structured output at all (network failure, rate limit, upstream outage,
+    missing/malformed tool call).
+
+    A SUBCLASS of LLMOutputError purely so it can be reported more precisely
+    to an operator -- every existing `except LLMOutputError` and
+    `pytest.raises(LLMOutputError)` still catches it, and the response_state
+    it produces is unchanged. This is an additive distinction, not a change
+    to the Phase 4 state machine: it exists so the UI can say "AI generation
+    is temporarily unavailable" instead of implying the verifier rejected a
+    draft that was never written.
+    """
+
+
+class InvalidOutputError(LLMOutputError):
+    """The provider returned structured output that failed schema validation.
+
+    Distinct from ProviderUnavailableError because the provider *worked* --
+    it just produced something that does not conform. Also a subclass, for
+    the same backward-compatibility reason.
+    """
 
 
 class GeneratedClaim(BaseModel):
@@ -56,9 +85,11 @@ def generate_draft(
             tool_name=TOOL_NAME,
         )
     except LLMGenerationError as exc:
-        raise LLMOutputError(f"provider '{provider.name}' failed to generate: {exc}") from exc
+        raise ProviderUnavailableError(f"provider '{provider.name}' failed to generate: {exc}") from exc
 
     try:
         return GeneratedDraft.model_validate(raw)
     except ValidationError as exc:
-        raise LLMOutputError(f"provider '{provider.name}' returned output that failed schema validation: {exc}") from exc
+        raise InvalidOutputError(
+            f"provider '{provider.name}' returned output that failed schema validation: {exc}"
+        ) from exc

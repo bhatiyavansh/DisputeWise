@@ -61,6 +61,7 @@ def _to_response(result: DraftResult) -> DraftResponse:
         claim_verifications=[ClaimVerificationResponse(**vars(c)) for c in result.verifications],
         response_state=result.response_state,
         response_state_reason=result.response_state_reason,
+        generation_error_kind=result.generation_error_kind,
         trace=ResponseTraceResponse(**vars(result.trace)),
     )
 

@@ -136,7 +136,7 @@ describe('CaseResponsePage', () => {
     renderCaseRoute('/case/DSP-031597/response')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Generate response draft' }))
-    await waitFor(() => expect(screen.getByText('Draft blocked')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Draft blocked by verifier')).toBeInTheDocument())
     expect(screen.queryByText('Draft ready')).not.toBeInTheDocument()
   })
 

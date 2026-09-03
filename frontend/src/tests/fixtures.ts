@@ -283,6 +283,7 @@ export function makeDraft(overrides: Partial<DraftResponse> = {}): DraftResponse
     ],
     response_state: 'DRAFT_READY',
     response_state_reason: 'All claims were supported by evidence on file.',
+    generation_error_kind: null,
     trace: {
       case_id: 'DSP-031597',
       decision: 'CONTEST',

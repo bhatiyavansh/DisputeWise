@@ -137,6 +137,13 @@ class DraftResponse(BaseModel):
     claim_verifications: list[ClaimVerificationResponse]
     response_state: str = Field(description="DRAFT_READY | DRAFT_FLAGGED | DRAFT_BLOCKED | GENERATION_UNAVAILABLE")
     response_state_reason: str
+    #: Additive: why generation produced no draft, when it produced none.
+    #: "provider_unavailable" (the LLM could not be reached / returned nothing
+    #: usable) or "invalid_output" (it responded but failed schema
+    #: validation). None when a draft exists or generation was not attempted.
+    #: response_state is unaffected -- this only lets a client distinguish an
+    #: LLM outage from a verifier rejection.
+    generation_error_kind: str | None = None
 
     trace: ResponseTraceResponse
     disclaimer: str = v.DISCLAIMER

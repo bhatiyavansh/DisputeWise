@@ -16,7 +16,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.decision.config import DecisionConfig
 from app.evidence_intel import versions as v
 from app.evidence_intel.gap_analyzer import EvidenceGapResult, case_evidence_state_from_rows, analyze_gap
-from app.evidence_intel.generation import GeneratedDraft, LLMOutputError, generate_draft
+from app.evidence_intel.generation import (
+    GeneratedDraft,
+    InvalidOutputError,
+    LLMOutputError,
+    ProviderUnavailableError,
+    generate_draft,
+)
 from app.evidence_intel.llm_provider import LLMProvider
 from app.evidence_intel.packet import EvidencePacket, build_packet
 from app.evidence_intel.reference_data import load_reference_data
@@ -106,6 +112,7 @@ class DraftResult:
         response_state_reason: str,
         trace: ResponseTrace,
         error: str | None = None,
+        generation_error_kind: str | None = None,
     ) -> None:
         self.case_id = case_id
         self.reason_code = reason_code
@@ -119,6 +126,12 @@ class DraftResult:
         self.response_state_reason = response_state_reason
         self.trace = trace
         self.error = error
+        #: Additive classification of WHY generation produced no draft --
+        #: 'provider_unavailable' or 'invalid_output'. None when generation
+        #: succeeded or was never attempted. response_state is unchanged by
+        #: this field; it exists so the UI can distinguish a provider outage
+        #: from a verifier rejection instead of showing both as 'blocked'.
+        self.generation_error_kind = generation_error_kind
 
 
 def generate_case_draft(
@@ -174,7 +187,12 @@ def generate_case_draft(
     try:
         draft = generate_draft(packet, retrieval_results, llm_provider)
     except LLMOutputError as exc:
+        # response_state stays DRAFT_BLOCKED for every generation failure --
+        # the Phase 4 contract is unchanged. Only the reporting is sharper.
         response_state = v.DRAFT_BLOCKED
+        error_kind = "provider_unavailable" if isinstance(exc, ProviderUnavailableError) else (
+            "invalid_output" if isinstance(exc, InvalidOutputError) else None
+        )
         reason = f"Generation failed: {exc}"
         trace = build_trace(
             case_id=case_id,
@@ -199,6 +217,7 @@ def generate_case_draft(
             response_state_reason=reason,
             trace=trace,
             error=str(exc),
+            generation_error_kind=error_kind,
         )
 
     verifications = verify_claims(draft.claims, packet, retrieval_results)
