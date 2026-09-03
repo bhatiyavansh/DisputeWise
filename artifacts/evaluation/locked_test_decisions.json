@@ -1,6 +1,6 @@
 {
   "evaluation_type": "official_locked_test_decisions",
-  "evaluated_at": "2026-09-02T09:25:07.020237+00:00",
+  "evaluated_at": "2026-09-03T21:18:47.227319+00:00",
   "model_version": "risk-v1",
   "decision_policy_version": "decision-v1",
   "decision_config": {

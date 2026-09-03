@@ -287,6 +287,100 @@ npm run dev   # http://localhost:5173 -- requires the backend running (see above
 
 Full setup, manual-testing walkthrough (demo case IDs per decision bucket, testing missing evidence / API failure / unknown cases), and architecture notes are in [docs/frontend.md](docs/frontend.md).
 
+## Phases 5-8 — decision workspace, simulation, portfolio & provenance
+
+Everything below reuses the frozen Phase 1-4 engines. No phase reimplements feature
+engineering, probability math, decision thresholds, or verification rules.
+
+| Phase | What | Endpoint(s) | Docs |
+|---|---|---|---|
+| 5 | Risk Command Center frontend (inbox + case workspace: overview / decision / evidence / response / audit) | — | [docs/frontend.md](docs/frontend.md) |
+| 6 | New-dispute simulation (hypothetical case, never persisted) | `POST /simulate` | [docs/phase6.md](docs/phase6.md) |
+| 7A | Evidence scenario analysis ("what if this evidence were added/removed?") | `POST /cases/{id}/evidence-scenario` | below |
+| 7B | Decision policy playground (hypothetical economics, portfolio re-routing) | `POST /policy/simulate`, `GET /policy/default` | below |
+| 7C | Portfolio risk view (server-side aggregation) | `GET /portfolio/summary` | below |
+| 7D | Case provenance trail | — (composed from existing responses) | below |
+| 8 | Free LLM provider evaluation + failure classification | — | [docs/phase8-llm-provider.md](docs/phase8-llm-provider.md) |
+
+### Simulation and scenario analysis (6, 7A)
+
+Both run a hypothetical through the **same** pipeline as a real case:
+`score_parts()` → `risk-v1` + calibration → `decision-v1` → `evidence-v1` gap → `knowledge-v1`
+retrieval → (opt-in) generation + `verifier-v1.1`.
+
+- **No target leakage.** Both request models are `extra="forbid"` and additionally refuse every
+  name in `FORBIDDEN_COLUMNS` explicitly, so an outcome field is a named 422 rather than a
+  silently ignored key. Neither model has a field describing a dispute's result.
+- **No persistence.** `simulation_service` takes no `Session` and imports no ORM model.
+  Scenario analysis works on detached, frozen copies of evidence rows, so no modified object
+  exists for SQLAlchemy to flush. Asserted by comparing the stored row, table counts, and the
+  case's own `/score` before and after.
+- **Scenario analysis is not causal inference.** Two model evaluations under two evidence
+  states — not an estimate of what obtaining the evidence would cause. The API says so and the
+  UI repeats it verbatim.
+
+### Policy playground (7B)
+
+A UI around the existing engine. It builds a throwaway `DecisionConfig` and hands it to the same
+`batch_decide()` / `summarize_buckets()` the offline evaluation scripts use — no threshold or
+expected-value math is duplicated in the service or the frontend. `decision-v1` is never mutated
+(asserted identical after a run), and the evidence gate is deliberately **not** tunable: it is
+safety behavior, not an economic dial.
+
+**Policy sensitivity is surfaced, not tuned away.** On the validation split at the prototype
+₹300 contest cost, contest-everything captures ₹10.35M realized net vs the default policy's
+₹5.40M — because even the 16.9%-favorable `DO_NOT_CONTEST` bucket is worth filing when a
+dispute is worth thousands and filing costs ₹300. Raise the cost to ₹5,000 and it inverts:
+contest-everything collapses to **−₹24.6M** while the policy holds at **+₹5.40M**. The model
+separates the buckets cleanly either way (90.7% vs 16.9% favorable); what changes is whether
+the cost assumption makes routing worth doing.
+
+### Portfolio view (7C)
+
+Server-side aggregation under the production policy: totals, decision routing with amount at
+risk, and breakdowns by reason code, probability band and evidence completeness. A test
+enumerates metric keys the dataset cannot support (SLA, throughput, recovery-to-date, trends)
+and fails if any is reintroduced; a missing dataset returns 503 rather than an empty-but-
+plausible portfolio.
+
+7B and 7C both use the **validation** split and never the locked test set — moving thresholds
+while watching held-out outcomes would be tuning against the benchmark. Every response states
+its split and labels realized figures as retrospective.
+
+### Provenance trail (7D)
+
+`case → features-v1 → risk-v1 → probability → decision-v1 → decision → evidence-v1 gap →
+knowledge-v1 retrieval → prompt-v1.1 → claims → verifier-v1.1 → human approval boundary`
+
+Each stage carries an explicit status (COMPLETE / NOT RUN / UNAVAILABLE / FAILED / BLOCKED) and
+the identifiers it referenced (source IDs, chunk IDs, cited evidence IDs, claim IDs, per-claim
+verification state). A stage that did not run reports NOT RUN and **no version string** —
+generation that was never requested cannot show a prompt or verifier version. This is a
+reproducibility record, not model reasoning: chain-of-thought is never requested, stored or
+rendered.
+
+## Known limitations
+
+Stated plainly, because each is a real constraint on how the results should be read.
+
+- **Synthetic data.** All 50,000 cases are generated. Metrics measure the model against a
+  known generative process, not real chargeback outcomes.
+- **The 8-case evidence benchmark is a constructed benchmark**, not a real-world
+  hallucination-rate estimate. 100% on it means 8/8 constructed scenarios behaved as specified.
+- **Contest cost (₹300) and recovery rate (1.0) are prototype assumptions**, not verified
+  production economics. See the policy sensitivity above.
+- **Simulation evidence strength uses distribution midpoints** (0.8 corroborating / 0.25
+  unhelpful) because the dataset draws strength randomly and a simulation must be reproducible.
+- **Simulation timestamps use a fixed anchor** — features consume only differences between
+  timestamps, so absolute time is irrelevant to scoring and fixing it makes runs reproducible.
+- **Verifier date/guarantee checks are regex-based.** There is no NLI or semantic entailment
+  layer; the verifier checks citations, availability, and textual patterns deterministically.
+- **Scenario analysis is not causal inference** (see above).
+- **Model performance varies substantially within archetypes** — the headline metrics are
+  portfolio-level.
+- **Free LLM endpoints are unreliable.** Generation can be unavailable at any moment; the
+  product degrades safely and says so rather than showing a stale or fabricated draft.
+
 ## Phase 1 exit criteria
 
 - [x] Docker Compose starts Postgres + FastAPI

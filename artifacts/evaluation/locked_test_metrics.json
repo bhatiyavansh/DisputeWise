@@ -1,6 +1,6 @@
 {
   "evaluation_type": "official_locked_test",
-  "evaluated_at": "2026-09-01T20:42:52.067148+00:00",
+  "evaluated_at": "2026-09-03T21:18:35.724390+00:00",
   "model_version": "risk-v1",
   "feature_schema_version": "features-v1",
   "dataset_version": "disputewise_synthetic_v1",
