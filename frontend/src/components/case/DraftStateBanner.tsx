@@ -1,53 +1,46 @@
-import type { GenerationErrorKind, ResponseState } from '../../api/types'
+import { classifyDraftResponse, type DraftOutcomeInput, type DraftOutcomeKind } from './draftOutcome'
 
-const STATE_COPY: Record<ResponseState, { label: string; classes: string }> = {
-  DRAFT_READY: { label: 'Draft ready', classes: 'border-contest-500/30 bg-contest-50/5 text-contest-700' },
-  DRAFT_FLAGGED: { label: 'Draft flagged for review', classes: 'border-review-500/30 bg-review-50/5 text-review-700' },
-  DRAFT_BLOCKED: { label: 'Draft blocked by verifier', classes: 'border-avoid-500/30 bg-avoid-50/5 text-avoid-700' },
-  GENERATION_UNAVAILABLE: { label: 'AI generation unavailable', classes: 'border-ink-700 bg-ink-800 text-ink-300' },
+const KIND_CLASSES: Record<DraftOutcomeKind, string> = {
+  ready: 'border-contest-500/30 bg-contest-50/5 text-contest-700',
+  flagged: 'border-review-500/30 bg-review-50/5 text-review-700',
+  verifier_blocked: 'border-avoid-500/30 bg-avoid-50/5 text-avoid-700',
+  provider_unavailable: 'border-review-500/30 bg-review-50/5 text-review-700',
+  generation_failed: 'border-review-500/30 bg-review-50/5 text-review-700',
+  generation_unavailable: 'border-ink-700 bg-ink-800 text-ink-300',
+  // Transport failures never reach this component -- no response exists to
+  // render -- but the map must be total.
+  network: 'border-avoid-500/30 bg-avoid-50/5 text-avoid-700',
+  backend_error: 'border-avoid-500/30 bg-avoid-50/5 text-avoid-700',
 }
 
 /**
- * The backend's own response_state, never softened, hidden or re-labeled as
- * ready -- that is the whole point of having a verifier in the loop.
+ * The outcome of a /draft response, classified from the response contract
+ * (`response_state` + `generation_error_kind`) rather than from HTTP status.
  *
- * One refinement over rendering response_state alone: the backend reports
- * DRAFT_BLOCKED for every generation failure, including one where the model
- * was never reachable and no draft was ever written. Calling that "blocked by
- * verifier" would be wrong -- there was nothing to verify. When the backend
- * says the failure was a provider problem (generation_error_kind), this is
- * presented as an AI-availability problem instead. The state itself is still
- * shown verbatim, and neither presentation implies a usable draft exists.
+ * A blocked or unavailable state is never softened, hidden or re-labeled as
+ * ready. Equally, an AI-provider outage is never presented as a verifier
+ * rejection: the backend reports both as DRAFT_BLOCKED, but when no draft
+ * was ever written there was nothing to verify.
+ *
+ * The backend's own `response_state_reason` is always shown verbatim beneath
+ * the summary, so the precise machine reason is never lost.
  */
-export function DraftStateBanner({
-  state,
-  reason,
-  errorKind = null,
-}: {
-  state: ResponseState
-  reason: string
-  errorKind?: GenerationErrorKind
-}) {
-  const isProviderProblem = errorKind === 'provider_unavailable' || errorKind === 'invalid_output'
-
-  const copy = isProviderProblem
-    ? {
-        label:
-          errorKind === 'provider_unavailable'
-            ? 'AI generation temporarily unavailable'
-            : 'AI generation returned unusable output',
-        classes: 'border-review-500/30 bg-review-50/5 text-review-700',
-      }
-    : STATE_COPY[state]
+export function DraftStateBanner({ draft }: { draft: DraftOutcomeInput }) {
+  const outcome = classifyDraftResponse(draft)
 
   return (
-    <div className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${copy.classes}`} role="status">
-      <p className="text-sm font-semibold">{copy.label}</p>
-      <p className="text-sm opacity-90">{reason}</p>
-      {isProviderProblem && (
+    <div className={`flex flex-col gap-1 rounded-lg border px-4 py-3 ${KIND_CLASSES[outcome.kind]}`} role="status">
+      <p className="text-sm font-semibold">{outcome.title}</p>
+      <p className="text-sm opacity-90">{outcome.message}</p>
+
+      {draft.response_state_reason && (
+        <p className="mt-1 text-xs opacity-75">{draft.response_state_reason}</p>
+      )}
+
+      {(outcome.kind === 'provider_unavailable' || outcome.kind === 'generation_failed') && (
         <p className="mt-1 text-xs opacity-80">
-          No draft was produced, so nothing was verified. Everything else on this case — scoring, the decision,
-          evidence gaps and retrieved requirements — is unaffected. You can try generating again.
+          No draft was produced, so nothing was verified. Scoring, the decision, evidence gaps and retrieved
+          requirements for this case are unaffected.
         </p>
       )}
     </div>

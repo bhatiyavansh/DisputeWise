@@ -21,6 +21,13 @@ export function generateDraft(caseId: string, signal?: AbortSignal): Promise<Dra
   return apiRequest<DraftResponse>(`/cases/${encodeURIComponent(caseId)}/draft`, {
     method: 'POST',
     signal,
+    // Generation is a live LLM call: observed 24-90s against the real
+    // provider. The client MUST outlast the backend's own provider timeout
+    // (60s) plus pipeline overhead, otherwise it aborts before the backend
+    // can return its structured provider-failure response -- which surfaced
+    // as a misleading "Backend unreachable" when the backend was fine and
+    // was about to report that the LLM provider was overloaded.
+    timeoutMs: 120_000,
   }).then((response) => {
     if (import.meta.env.DEV) {
       // Dev-only, structure-only -- no secrets in this response to begin

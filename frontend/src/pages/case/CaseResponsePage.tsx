@@ -4,6 +4,7 @@ import { ErrorState } from '../../components/common/ErrorState'
 import { InlineSpinner, SkeletonCard } from '../../components/common/LoadingStates'
 import { RetrievedKnowledgePanel } from '../../components/case/RetrievedKnowledgePanel'
 import { ResponseDraftWorkspace } from '../../components/case/ResponseDraftWorkspace'
+import { classifyDraftError } from '../../components/case/draftOutcome'
 import { useDraft } from '../../hooks/useCaseWorkspace'
 import type { CaseOutletContext } from './CaseLayout'
 
@@ -63,10 +64,17 @@ export function CaseResponsePage() {
   }
 
   if (draftQuery.status === 'error') {
+    // No response arrived, so this is a transport/backend failure -- the
+    // only case where "unreachable" wording can be correct. Anything the
+    // backend actually answered is classified from the response instead
+    // (see ResponseDraftWorkspace / classifyDraftResponse).
+    const outcome = classifyDraftError(draftQuery.error)
     return (
       <ErrorState
         error={draftQuery.error}
-        title={draftQuery.error?.kind === 'unavailable' ? 'Response generation unavailable' : undefined}
+        title={outcome.title}
+        message={outcome.message}
+        retryLabel="Try again"
         onRetry={draftQuery.refetch}
       />
     )

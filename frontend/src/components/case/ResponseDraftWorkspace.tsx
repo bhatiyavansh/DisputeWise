@@ -14,11 +14,7 @@ import { Panel } from '../common/Panel'
 export function ResponseDraftWorkspace({ draft }: { draft: DraftResponse }) {
   return (
     <div className="flex flex-col gap-5">
-      <DraftStateBanner
-        state={draft.response_state}
-        reason={draft.response_state_reason}
-        errorKind={draft.generation_error_kind}
-      />
+      <DraftStateBanner draft={draft} />
 
       {draft.response_body && (
         <Panel title="Drafted Response" subtitle={`prompt ${draft.prompt_version} -- response schema ${draft.response_schema_version}`}>

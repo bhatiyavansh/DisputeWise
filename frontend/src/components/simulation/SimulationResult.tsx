@@ -69,7 +69,7 @@ export function SimulationResult({ result }: { result: SimulationResponse }) {
 
       {generation && (
         <>
-          <DraftStateBanner state={generation.response_state} reason={generation.response_state_reason} />
+          <DraftStateBanner draft={generation} />
           {generation.response_body && (
             <Panel title="Drafted Response">
               {generation.summary && <p className="mb-3 text-sm font-medium text-ink-200">{generation.summary}</p>}

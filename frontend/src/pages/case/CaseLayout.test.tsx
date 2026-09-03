@@ -136,7 +136,7 @@ describe('CaseResponsePage', () => {
     renderCaseRoute('/case/DSP-031597/response')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Generate response draft' }))
-    await waitFor(() => expect(screen.getByText('Draft blocked by verifier')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AI response blocked')).toBeInTheDocument())
     expect(screen.queryByText('Draft ready')).not.toBeInTheDocument()
   })
 
@@ -177,5 +177,75 @@ describe('CaseResponsePage', () => {
     await waitFor(() => expect(screen.getByText('Draft ready')).toBeInTheDocument())
     expect(screen.queryByText(/Service temporarily overloaded/)).not.toBeInTheDocument()
     expect(draftCallCount).toBe(2)
+  })
+  it('renders a provider outage as an AI-availability problem, never "Backend unreachable"', async () => {
+    installFetchMock([
+      ...BASE_ROUTES,
+      jsonRoute(
+        'POST',
+        /\/draft$/,
+        200,
+        makeDraft({
+          response_state: 'DRAFT_BLOCKED',
+          response_state_reason:
+            "Generation failed: provider 'openrouter' reported an upstream error: Service temporarily overloaded (code=502)",
+          generation_error_kind: 'provider_unavailable',
+          claims: [],
+          claim_verifications: [],
+          response_body: null,
+        }),
+      ),
+    ])
+    renderCaseRoute('/case/DSP-031597/response')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate response draft' }))
+
+    await waitFor(() => expect(screen.getByText('AI generation temporarily unavailable')).toBeInTheDocument())
+    // the bug this guards: a valid HTTP response reported as a dead backend
+    expect(screen.queryByText('Backend unreachable')).not.toBeInTheDocument()
+    expect(screen.queryByText('AI response blocked')).not.toBeInTheDocument()
+  })
+
+  it('renders an unconfigured provider as generation unavailable', async () => {
+    installFetchMock([
+      ...BASE_ROUTES,
+      jsonRoute(
+        'POST',
+        /\/draft$/,
+        200,
+        makeDraft({
+          response_state: 'GENERATION_UNAVAILABLE',
+          response_state_reason: 'No LLM provider is configured.',
+          generation_error_kind: null,
+          claims: [],
+          claim_verifications: [],
+          response_body: null,
+        }),
+      ),
+    ])
+    renderCaseRoute('/case/DSP-031597/response')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate response draft' }))
+    await waitFor(() => expect(screen.getByText('AI generation unavailable')).toBeInTheDocument())
+    expect(screen.queryByText('Backend unreachable')).not.toBeInTheDocument()
+  })
+
+  it('renders a genuine transport failure as Backend unreachable', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString())
+      if (url.pathname.endsWith('/draft')) throw new TypeError('Failed to fetch')
+      const route = BASE_ROUTES.find(
+        (r) => r.method === (init?.method ?? 'GET').toUpperCase() && r.pattern.test(url.pathname),
+      )
+      if (!route) throw new Error(`no mock route for ${url.pathname}`)
+      const { status, body } = route.handler()
+      return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderCaseRoute('/case/DSP-031597/response')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate response draft' }))
+    await waitFor(() => expect(screen.getByText('Backend unreachable')).toBeInTheDocument())
+    expect(screen.getByText(/could not reach the backend/i)).toBeInTheDocument()
   })
 })

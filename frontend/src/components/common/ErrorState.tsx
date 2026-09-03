@@ -15,11 +15,18 @@ const KIND_COPY: Record<string, { title: string; hint: string }> = {
 export function ErrorState({
   error,
   title,
+  message,
+  retryLabel = 'Retry',
   onRetry,
   compact = false,
 }: {
   error?: ApiError | null
   title?: string
+  /** Overrides the body text. Use when the caller can classify the failure
+   * more precisely than the generic per-kind copy (e.g. the AI Response tab
+   * distinguishing a provider outage from an unreachable backend). */
+  message?: string
+  retryLabel?: string
   onRetry?: () => void
   compact?: boolean
 }) {
@@ -39,14 +46,14 @@ export function ErrorState({
         </span>
         <p className="font-semibold text-ink-50">{heading}</p>
       </div>
-      <p className="text-sm text-ink-400">{error?.message || copy.hint}</p>
+      <p className="text-sm text-ink-400">{message ?? (error?.message || copy.hint)}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
           className="mt-1 rounded border border-ink-700 bg-ink-800 px-3 py-1.5 text-sm font-medium text-ink-100 transition-colors hover:bg-ink-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
         >
-          Retry
+          {retryLabel}
         </button>
       )}
     </div>
