@@ -27,6 +27,7 @@ export function CaseAuditPage() {
     <div className="flex flex-col gap-5">
       <Panel title="Audit Trail" subtitle="model, policy, and provenance versions for this case's pipeline run">
         <AuditTrailTimeline
+          caseId={caseId}
           score={scoreQuery.data}
           decision={decisionQuery.data.data}
           gap={gapQuery.data}
