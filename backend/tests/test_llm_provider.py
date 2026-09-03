@@ -211,6 +211,26 @@ def test_openrouter_request_forces_tool_choice_to_the_named_tool():
     provider.close()
 
 
+def test_openrouter_request_disables_parallel_tool_calls_and_pins_temperature():
+    """Both reduce the chance of a malformed/ambiguous tool-call response --
+    parallel_tool_calls=False means at most one call to reconcile, temperature=0
+    makes the (already forced) tool call deterministic rather than varying the
+    reasoning trace length run to run."""
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return _tool_call_response("emit", {"summary": "ok", "claims": [], "missing_evidence": [], "response_body": "b"})
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    provider.complete_structured(system="s", user="u", schema={"type": "object"}, tool_name="emit")
+
+    assert captured["body"]["parallel_tool_calls"] is False
+    assert captured["body"]["temperature"] == 0
+    assert captured["body"]["max_tokens"] > 0
+    provider.close()
+
+
 # ---------------------------------------------------------------------------
 # OpenRouterLLMProvider -- structured output parsing
 # ---------------------------------------------------------------------------
@@ -267,7 +287,71 @@ def test_openrouter_rejects_arguments_that_are_not_valid_json():
 
 def test_openrouter_rejects_response_with_no_tool_calls():
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"choices": [{"message": {"content": "I cannot help with that."}}]})
+        return httpx.Response(
+            200,
+            json={"choices": [{"finish_reason": "length", "message": {"content": "I cannot help with that."}}]},
+        )
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    with pytest.raises(LLMGenerationError, match="tool_calls"):
+        provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
+    provider.close()
+
+
+def test_openrouter_no_tool_calls_error_surfaces_finish_reason_for_diagnosis():
+    """A truncated reasoning response (finish_reason='length') is the
+    observed real-world failure mode -- the error message should say so
+    rather than a bare 'no tool_calls', to make it diagnosable without
+    needing the dev-only response logging enabled."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": None}}]})
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    with pytest.raises(LLMGenerationError, match="finish_reason='length'"):
+        provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
+    provider.close()
+
+
+def test_openrouter_surfaces_error_envelope_returned_with_http_200():
+    """Observed live: OpenRouter can report an upstream-provider failure
+    (e.g. the underlying model being overloaded) as HTTP 200 with an
+    `error` object and no `choices` at all, rather than a non-200 status.
+    This must be reported with the real cause, not the generic
+    'no tool_calls block' message."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "gen-123",
+                "error": {"message": "Upstream error from Nvidia: Service temporarily overloaded", "code": 502},
+            },
+        )
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    with pytest.raises(LLMGenerationError, match="Service temporarily overloaded"):
+        provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
+    provider.close()
+
+
+def test_openrouter_never_falls_back_to_parsing_content_as_structured_output():
+    """Even if `content` happens to contain something JSON-shaped, it must
+    never be treated as validated structured output -- only a real
+    tool_calls entry counts. This is the whole point of forced tool-calling."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": json.dumps({"summary": "s", "claims": [], "missing_evidence": [], "response_body": "b"})},
+                    }
+                ]
+            },
+        )
 
     provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
     with pytest.raises(LLMGenerationError, match="tool_calls"):
@@ -368,6 +452,77 @@ def test_openrouter_does_not_retry_on_failure():
         provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
     assert call_count["n"] == 1
     provider.close()
+
+
+# ---------------------------------------------------------------------------
+# OpenRouterLLMProvider -- dev-only diagnostic logging
+# ---------------------------------------------------------------------------
+
+
+def test_openrouter_diagnostics_never_print_the_api_key(monkeypatch, capsys):
+    from app.config import get_settings
+
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    get_settings.cache_clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _tool_call_response("emit", {"summary": "s", "claims": [], "missing_evidence": [], "response_body": "b"})
+
+    provider = OpenRouterLLMProvider(
+        api_key="sk-or-super-secret-value-98765", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler)
+    )
+    try:
+        provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
+        out = capsys.readouterr().out
+        assert "sk-or-super-secret-value-98765" not in out
+        assert "openrouter" in out.lower()  # diagnostics were actually printed (dev default)
+    finally:
+        provider.close()
+        get_settings.cache_clear()
+
+
+def test_openrouter_diagnostics_silent_in_production(monkeypatch, capsys):
+    from app.config import get_settings
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    get_settings.cache_clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _tool_call_response("emit", {"summary": "s", "claims": [], "missing_evidence": [], "response_body": "b"})
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    try:
+        provider.complete_structured(system="s", user="u", schema={}, tool_name="emit")
+        out = capsys.readouterr().out
+        assert "[DisputeWise][openrouter]" not in out
+    finally:
+        provider.close()
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        get_settings.cache_clear()
+
+
+def test_openrouter_diagnostics_never_include_prompt_content(monkeypatch, capsys):
+    """The system/user prompts can carry real case data -- diagnostics must
+    describe the response's shape only, never echo request content."""
+    from app.config import get_settings
+
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    get_settings.cache_clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _tool_call_response("emit", {"summary": "s", "claims": [], "missing_evidence": [], "response_body": "b"})
+
+    provider = OpenRouterLLMProvider(api_key="k", model=FREE_MODEL, base_url=BASE_URL, transport=httpx.MockTransport(handler))
+    try:
+        provider.complete_structured(
+            system="SENSITIVE-SYSTEM-MARKER", user="SENSITIVE-CASE-DATA-MARKER", schema={}, tool_name="emit"
+        )
+        out = capsys.readouterr().out
+        assert "SENSITIVE-SYSTEM-MARKER" not in out
+        assert "SENSITIVE-CASE-DATA-MARKER" not in out
+    finally:
+        provider.close()
+        get_settings.cache_clear()
 
 
 # ---------------------------------------------------------------------------

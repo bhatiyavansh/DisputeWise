@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     api_default_page_size: int = 25
     api_max_page_size: int = 200
 
+    # Gates the OpenRouter provider's diagnostic response logging (see
+    # OpenRouterLLMProvider._log_diagnostics). Defaults to "development"
+    # since this is a demo app with no separate prod deployment configured
+    # yet; set ENVIRONMENT=production to silence it.
+    environment: str = "development"
+
     # Phase 4 -- optional. The app must run fully (evidence gap analysis, RAG
     # retrieval, all non-generation endpoints, and the entire test suite)
     # with all of this unset. Never hardcode a key here or anywhere else.

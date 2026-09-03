@@ -172,7 +172,22 @@ class OpenRouterLLMProvider(LLMProvider):
                     },
                 }
             ],
+            # Force exactly this one tool call, OpenAI-compatible shape --
+            # verified against OpenRouter's current tool-calling docs for
+            # this model rather than assumed.
             "tool_choice": {"type": "function", "function": {"name": tool_name}},
+            "parallel_tool_calls": False,
+            "temperature": 0,
+            # The configured model is a "reasoning" model that spends a
+            # large, variable number of tokens on an internal reasoning
+            # trace before emitting the tool call (observed: ~2.7k reasoning
+            # tokens for a single real case). Without an explicit budget the
+            # response can be truncated mid-reasoning, before the tool_calls
+            # block is ever emitted -- which surfaces downstream as "did not
+            # contain a tool_calls block" even though the request/tool setup
+            # was correct. This headroom exists to make that truncation rare,
+            # not to change what gets generated.
+            "max_tokens": 8000,
         }
 
         try:
@@ -182,17 +197,72 @@ class OpenRouterLLMProvider(LLMProvider):
             # unavailable", not retried (see class docstring).
             raise LLMGenerationError(f"OpenRouter request failed: {type(exc).__name__} (provider unreachable)") from exc
 
+        body: dict[str, Any] | None
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+
+        self._log_diagnostics(status_code=response.status_code, body=body)
+
         if response.status_code != 200:
             raise LLMGenerationError(
                 f"OpenRouter request failed with HTTP {response.status_code}: {self._safe_error_text(response)}"
             )
 
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise LLMGenerationError("OpenRouter returned a response that was not valid JSON") from exc
+        if body is None:
+            raise LLMGenerationError("OpenRouter returned a response that was not valid JSON")
+
+        # OpenRouter can report an upstream-provider failure (rate limit,
+        # overload, etc.) as HTTP 200 with an `error` envelope instead of a
+        # non-200 status -- observed live: {"error": {"message": "Upstream
+        # error from Nvidia: Service temporarily overloaded", "code": 502}}
+        # with no `choices` at all. Left unchecked this fell through to the
+        # generic "did not contain a tool_calls block" message, which is
+        # true but hides the actual, more useful cause. Checked before
+        # touching `choices` so the real reason surfaces in
+        # response_state_reason.
+        if isinstance(body.get("error"), dict):
+            error = body["error"]
+            message = error.get("message", "unknown error")
+            code = error.get("code")
+            raise LLMGenerationError(f"OpenRouter reported an upstream error: {message} (code={code!r})")
 
         return self._extract_tool_arguments(body, tool_name)
+
+    @staticmethod
+    def _log_diagnostics(*, status_code: int, body: dict[str, Any] | None) -> None:
+        """Development-only, structure-only diagnostics for a tool-calling
+        failure -- never the request (no prompt/case content) and never the
+        Authorization header/API key. Silent in production (ENVIRONMENT=production).
+        """
+        if get_settings().environment == "production":
+            return
+
+        if body is None:
+            print(f"[DisputeWise][openrouter] status={status_code} body=<not valid JSON>")  # noqa: T201
+            return
+
+        try:
+            choices = body.get("choices")
+            choice = choices[0] if isinstance(choices, list) and choices else {}
+            message = choice.get("message") if isinstance(choice, dict) else {}
+            message = message if isinstance(message, dict) else {}
+            tool_calls = message.get("tool_calls")
+            print(  # noqa: T201
+                "[DisputeWise][openrouter] "
+                f"status={status_code} model={body.get('model')!r} "
+                f"finish_reason={choice.get('finish_reason')!r} "
+                f"native_finish_reason={choice.get('native_finish_reason')!r} "
+                f"message_keys={sorted(message.keys())} "
+                f"has_tool_calls={tool_calls is not None} "
+                f"tool_call_count={len(tool_calls) if isinstance(tool_calls, list) else 0} "
+                f"refusal_present={message.get('refusal') is not None} "
+                f"content_present={bool(message.get('content'))} "
+                f"provider={body.get('provider')!r}"
+            )
+        except Exception as exc:  # diagnostics must never break the real request path
+            print(f"[DisputeWise][openrouter] status={status_code} (failed to introspect response shape: {exc})")  # noqa: T201
 
     @staticmethod
     def _safe_error_text(response: Any, limit: int = 500) -> str:
@@ -207,10 +277,22 @@ class OpenRouterLLMProvider(LLMProvider):
 
     @staticmethod
     def _extract_tool_arguments(body: dict[str, Any], tool_name: str) -> dict[str, Any]:
+        # Structured output only comes through `tool_calls` -- we never fall
+        # back to parsing `message.content` as JSON here, even if it happens
+        # to look structured. That would mean trusting arbitrary prose as
+        # validated output, which is exactly what forced tool-calling exists
+        # to avoid (see class docstring and generation.py).
         try:
             tool_calls = body["choices"][0]["message"]["tool_calls"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise LLMGenerationError("OpenRouter response did not contain a tool_calls block") from exc
+            finish_reason = None
+            try:
+                finish_reason = body["choices"][0].get("finish_reason")
+            except (KeyError, IndexError, TypeError):
+                pass
+            raise LLMGenerationError(
+                f"OpenRouter response did not contain a tool_calls block (finish_reason={finish_reason!r})"
+            ) from exc
 
         if not tool_calls:
             raise LLMGenerationError("OpenRouter response contained an empty tool_calls list")
