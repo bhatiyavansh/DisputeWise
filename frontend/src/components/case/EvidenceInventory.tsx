@@ -31,21 +31,23 @@ export function EvidenceInventory({ evidence, summary }: { evidence: EvidenceIte
                     className={`px-3 py-2.5 ${item.available ? '' : 'bg-avoid-50/5'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5 text-sm font-medium text-ink-100">
+                      <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-ink-100">
                         <span
-                          className={item.available ? 'text-contest-500' : 'text-avoid-500'}
+                          className={`shrink-0 ${item.available ? 'text-contest-500' : 'text-avoid-500'}`}
                           aria-hidden="true"
                         >
                           {item.available ? '✓' : '✕'}
                         </span>
-                        {formatEvidenceType(item.evidence_type)}
+                        <span className="truncate">{formatEvidenceType(item.evidence_type)}</span>
                       </span>
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium uppercase ${RELEVANCE_CLASSES[item.relevance]}`}>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium uppercase ${RELEVANCE_CLASSES[item.relevance]}`}>
                         {item.relevance}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2 text-xs text-ink-500">
-                      <span>{item.available ? formatEvidenceValue(item.value) : 'Not on file'}</span>
+                      <span className="min-w-0 truncate" title={item.available ? formatEvidenceValue(item.value) : undefined}>
+                        {item.available ? formatEvidenceValue(item.value) : 'Not on file'}
+                      </span>
                       <span className="tabular shrink-0" title="Evidence strength (0-1)">
                         {item.available ? `strength ${item.strength.toFixed(2)}` : ''}
                       </span>

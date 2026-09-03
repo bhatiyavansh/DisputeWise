@@ -26,9 +26,29 @@ export function ClaimVerificationList({
   verifications: ClaimVerification[]
 }) {
   const verificationByClaimId = new Map(verifications.map((v) => [v.claim_id, v]))
+  // A plain count of the verifier's own per-claim results -- not a second
+  // judgment about them. "Supported" here matches exactly the SUPPORTED
+  // status the backend already assigned; nothing is re-evaluated here.
+  const supportedCount = verifications.filter((v) => v.status === 'SUPPORTED').length
 
   return (
-    <Panel title="Claim Verification" subtitle={`${claims.length} claim(s) generated, independently checked against the evidence packet`}>
+    <Panel
+      title="Claim Verification"
+      subtitle={`${claims.length} claim(s) generated, independently checked against the evidence packet`}
+      action={
+        verifications.length > 0 && (
+          <span
+            className={`tabular shrink-0 rounded px-2 py-1 text-sm font-semibold ${
+              supportedCount === verifications.length
+                ? 'bg-contest-50 text-contest-700'
+                : 'bg-avoid-50 text-avoid-700'
+            }`}
+          >
+            {supportedCount} / {verifications.length} supported
+          </span>
+        )
+      }
+    >
       <ul className="flex flex-col divide-y divide-ink-800 overflow-hidden rounded border border-ink-800">
         {claims.map((claim) => (
           <ClaimRow key={claim.claim_id} claim={claim} verification={verificationByClaimId.get(claim.claim_id) ?? null} />
@@ -49,7 +69,7 @@ function ClaimRow({ claim, verification }: { claim: GeneratedClaim; verification
         aria-expanded={open}
         className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-ink-800/50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500"
       >
-        <span className="text-sm text-ink-100">{claim.text}</span>
+        <span className="min-w-0 text-sm text-ink-100">{claim.text}</span>
         <span className="flex shrink-0 items-center gap-2">
           {verification && (
             <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium uppercase ${STATUS_CLASSES[verification.status]}`}>

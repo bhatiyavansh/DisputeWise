@@ -82,7 +82,7 @@ function GapList({ items }: { items: EvidenceGapItem[] }) {
     <ul className="flex flex-col divide-y divide-ink-800 overflow-hidden rounded border border-ink-800">
       {items.map((item) => (
         <li key={`${item.evidence_type}-${item.source_id}`} className="flex items-start justify-between gap-3 px-3 py-2.5">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-medium text-ink-100">{formatEvidenceType(item.evidence_type)}</p>
             <p className="mt-0.5 text-xs text-ink-500">{item.reason}</p>
           </div>

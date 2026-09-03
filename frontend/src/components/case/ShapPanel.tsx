@@ -61,11 +61,11 @@ function FactorList({
         <ul className="flex flex-col gap-2.5">
           {factors.map((factor) => (
             <li key={factor.feature} className="flex items-start justify-between gap-3 text-sm">
-              <span className="flex items-start gap-2">
+              <span className="flex min-w-0 items-start gap-2">
                 <span className={`mt-0.5 shrink-0 ${iconClass}`} aria-hidden="true">
                   {icon}
                 </span>
-                <span className="text-ink-200">{factor.description}</span>
+                <span className="min-w-0 text-ink-200">{factor.description}</span>
               </span>
               <span
                 className={`tabular shrink-0 whitespace-nowrap font-mono text-xs ${tone === 'positive' ? 'text-contest-500' : 'text-avoid-500'}`}

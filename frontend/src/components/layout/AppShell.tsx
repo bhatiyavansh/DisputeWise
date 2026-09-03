@@ -6,11 +6,11 @@ import { Sidebar } from './Sidebar'
 import { QuickCaseLookup } from './QuickCaseLookup'
 
 const SECTION_LABELS: Record<string, string> = {
-  '': 'Case Intelligence',
-  decision: 'Decisions',
+  '': 'Overview',
+  decision: 'Decision',
   evidence: 'Evidence',
-  response: 'AI Response',
-  audit: 'Audit Trail',
+  response: 'Response',
+  audit: 'Audit',
 }
 
 export function AppShell({ children }: { children: ReactNode }) {

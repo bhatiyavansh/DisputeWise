@@ -40,8 +40,8 @@ export function useDecision(
 }
 
 /** Phase 4 Part A -- evidence gap analysis (reason code + evidence -> required/available/missing). */
-export function useEvidenceGap(caseId: string) {
-  return useAsyncResource(`evidence-gap:${caseId}`, (signal) => getEvidenceGap(caseId, signal))
+export function useEvidenceGap(caseId: string, enabled = true) {
+  return useAsyncResource(enabled ? `evidence-gap:${caseId}` : null, (signal) => getEvidenceGap(caseId, signal))
 }
 
 /** Phase 4 Part B -- the full evidence packet (facts + evidence + gap + guidance). */

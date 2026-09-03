@@ -185,10 +185,20 @@ export function ToggleField({
           value ? 'border-accent-500 bg-accent-600' : 'border-ink-700 bg-ink-800'
         }`}
       >
+        {/* Vertical centering is done with `top` + `marginTop` (not the
+            `-translate-y-1/2` utility) because `animate={{ x }}` makes Motion
+            own the `transform` property outright -- it overwrites rather than
+            composes with a Tailwind transform class on the same element, so
+            the class's translateY silently disappeared and the thumb rendered
+            off-center, spilling out of this row and getting cut off by the
+            parent Section's overflow-hidden (needed for its height
+            animation). Only `x` is ever animated now, so there's nothing for
+            Motion's transform to clobber. */}
         <motion.span
           animate={{ x: value ? 16 : 2 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full bg-ink-50"
+          style={{ top: '50%', marginTop: '-0.4375rem' }}
+          className="absolute h-3.5 w-3.5 rounded-full bg-ink-50"
         />
       </button>
     </div>

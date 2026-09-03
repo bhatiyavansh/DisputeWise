@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { cn } from '../../utils/cn'
@@ -8,22 +9,26 @@ import { cn } from '../../utils/cn'
  * rather than pulled in as an installed package -- Aceternity distributes
  * components as copy-paste source, not an npm library.
  *
- * "Case Intelligence / Decisions / Evidence / AI Response / Audit Trail" are
- * real sections of an OPEN case, not standalone pages with their own data --
- * there is no "list all decisions across every case" endpoint, so showing
- * them as global links when no case is open would be a dead end / a fake
- * section. They appear here, scoped to the current case, only once a case
- * route is active.
+ * Grouped into three sections that match how a merchant actually thinks
+ * about the product: RISK (the portfolio and its disputes), ANALYZE
+ * (hypothetical/what-if tools that don't touch a specific stored case),
+ * CASE (the currently-open case's own workspace).
+ *
+ * "Overview / Decision / Evidence / Response / Audit" are real sections of
+ * an OPEN case, not standalone pages with their own data -- there is no
+ * "list all decisions across every case" endpoint, so showing them as
+ * global links when no case is open would be a dead end / a fake section.
+ * The CASE group only renders once a case route is active.
  */
 
 const CASE_ID_PATTERN = /^\/case\/([^/]+)/
 
 const CASE_TABS = [
-  { to: '', label: 'Case Intelligence' },
-  { to: '/decision', label: 'Decisions' },
+  { to: '', label: 'Overview' },
+  { to: '/decision', label: 'Decision' },
   { to: '/evidence', label: 'Evidence' },
-  { to: '/response', label: 'AI Response' },
-  { to: '/audit', label: 'Audit Trail' },
+  { to: '/response', label: 'Response' },
+  { to: '/audit', label: 'Audit' },
 ]
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
@@ -44,43 +49,29 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {!collapsed && <span className="truncate text-sm font-semibold tracking-tight text-ink-50">DisputeWise</span>}
       </div>
 
-      <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-3">
-        <SidebarLink to="/disputes" label="Disputes" collapsed={collapsed} />
-        <SidebarLink to="/risk" label="Portfolio Risk" collapsed={collapsed} />
-        <SidebarLink to="/playground" label="Policy Playground" collapsed={collapsed} />
-        <NavLink
-          to="/simulation"
-          title={collapsed ? 'Simulate New Dispute' : undefined}
-          className={({ isActive }) =>
-            cn(
-              'mt-1 flex items-center gap-1.5 rounded-md border border-ink-700 px-2.5 py-1.5 text-sm font-medium text-ink-300 no-underline transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-ink-100',
-              isActive && 'border-accent-600/50 bg-ink-800 text-ink-50',
-            )
-          }
-        >
-          <span aria-hidden="true">+</span>
-          <span className={cn('truncate', collapsed && 'sr-only')}>Simulate New Dispute</span>
-        </NavLink>
+      <nav aria-label="Primary" className="flex flex-1 flex-col gap-4 overflow-y-auto px-2.5 py-3">
+        <SidebarGroup label="Risk" collapsed={collapsed}>
+          <SidebarLink to="/disputes" label="Disputes" collapsed={collapsed} />
+          <SidebarLink to="/risk" label="Portfolio" collapsed={collapsed} />
+        </SidebarGroup>
+
+        <SidebarGroup label="Analyze" collapsed={collapsed}>
+          <SidebarLink to="/simulation" label="New Simulation" collapsed={collapsed} />
+          <SidebarLink to="/playground" label="Policy Playground" collapsed={collapsed} />
+        </SidebarGroup>
 
         {activeCaseId && (
-          <div className="mt-5">
-            {!collapsed && (
-              <p className="mb-1.5 truncate px-2.5 font-mono text-[11px] font-medium uppercase tracking-wide text-ink-500">
-                {activeCaseId}
-              </p>
-            )}
-            <div className="flex flex-col gap-0.5">
-              {CASE_TABS.map((tab) => (
-                <SidebarLink
-                  key={tab.label}
-                  to={`/case/${activeCaseId}${tab.to}`}
-                  label={tab.label}
-                  collapsed={collapsed}
-                  end={tab.to === ''}
-                />
-              ))}
-            </div>
-          </div>
+          <SidebarGroup label="Case" hint={activeCaseId} collapsed={collapsed}>
+            {CASE_TABS.map((tab) => (
+              <SidebarLink
+                key={tab.label}
+                to={`/case/${activeCaseId}${tab.to}`}
+                label={tab.label}
+                collapsed={collapsed}
+                end={tab.to === ''}
+              />
+            ))}
+          </SidebarGroup>
         )}
       </nav>
 
@@ -93,6 +84,30 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <ChevronIcon collapsed={collapsed} />
       </button>
     </motion.aside>
+  )
+}
+
+function SidebarGroup({
+  label,
+  hint,
+  collapsed,
+  children,
+}: {
+  label: string
+  hint?: string
+  collapsed: boolean
+  children: ReactNode
+}) {
+  return (
+    <div>
+      {!collapsed && (
+        <p className="mb-1.5 flex items-baseline gap-2 truncate px-2.5 text-[11px] font-medium uppercase tracking-wide text-ink-600">
+          {label}
+          {hint && <span className="truncate font-mono normal-case tracking-normal text-ink-500">{hint}</span>}
+        </p>
+      )}
+      <div className="flex flex-col gap-0.5">{children}</div>
+    </div>
   )
 }
 
