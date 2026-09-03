@@ -7,6 +7,8 @@ from app.api import (
     evidence,
     evidence_gap,
     evidence_packet,
+    policy,
+    portfolio,
     scenario,
     scoring,
     simulate,
@@ -29,6 +31,8 @@ app.include_router(drafts.router)
 app.include_router(verify.router)
 app.include_router(simulate.router)
 app.include_router(scenario.router)
+app.include_router(policy.router)
+app.include_router(portfolio.router)
 
 
 @app.get("/health", tags=["health"])

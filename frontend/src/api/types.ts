@@ -576,3 +576,105 @@ export interface EvidenceScenarioResponse {
   persisted: boolean
   disclaimer: string
 }
+
+// ---------------------------------------------------------------------------
+// Policy playground (7B) + portfolio (7C)
+// ---------------------------------------------------------------------------
+
+export interface PolicyConfig {
+  contest_cost: number
+  recovery_rate: number
+  high_confidence_probability: number
+  low_confidence_probability: number
+  min_expected_net_value: number
+  review_margin: number
+}
+
+export interface PolicyDefaults {
+  decision_policy_version: string
+  tunable_fields: (keyof PolicyConfig)[]
+  defaults: PolicyConfig
+  economics_explanation: string
+  note: string
+}
+
+export interface PolicyBucket {
+  count: number
+  percentage: number
+  actual_favorable_outcome_rate: number | null
+  expected_recovery_total: number
+  expected_net_value_total: number
+  realized_recovery_total: number
+  estimated_contest_cost_total: number
+  realized_net_value_total: number
+  evidence_gap_downgrades: number
+}
+
+export interface PolicySummary {
+  policy: string
+  n_total: number
+  buckets: Record<Decision, PolicyBucket>
+  portfolio: {
+    total_expected_net_value: number
+    contest_only_expected_net_value: number
+    contest_only_realized_net_value: number
+    contest_volume: number
+    review_volume: number
+    do_not_contest_volume: number
+  }
+}
+
+export interface PolicySimulationResponse {
+  split: string
+  n_cases: number
+  is_simulation: boolean
+  decision_policy_version: string
+  model_version: string
+  feature_schema_version: string
+  default_config: PolicyConfig
+  scenario_config: PolicyConfig
+  changed_fields: (keyof PolicyConfig)[]
+  default_policy: PolicySummary
+  scenario_policy: PolicySummary
+  contest_everything_baseline: PolicySummary
+  economics_explanation: string
+  note: string
+}
+
+export interface PortfolioBucket {
+  decision: Decision
+  count: number
+  percentage: number
+  total_amount: number
+  expected_recovery: number
+  expected_net_value: number
+  actual_favorable_outcome_rate: number | null
+  evidence_gap_downgrades: number
+}
+
+export interface PortfolioGroup {
+  key: string
+  count: number
+  total_amount: number
+  mean_probability: number
+}
+
+export interface PortfolioSummaryResponse {
+  split: string
+  n_cases: number
+  total_disputed_amount: number
+  total_expected_recovery: number
+  total_expected_net_value: number
+  contest_only_expected_net_value: number
+  contest_only_realized_net_value: number
+  mean_calibrated_probability: number
+  cases_with_missing_high_relevance_evidence: number
+  decisions: PortfolioBucket[]
+  by_reason_code: PortfolioGroup[]
+  by_probability_band: PortfolioGroup[]
+  by_evidence_completeness: PortfolioGroup[]
+  model_version: string
+  feature_schema_version: string
+  decision_policy_version: string
+  note: string
+}

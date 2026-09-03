@@ -9,6 +9,8 @@ import { CaseResponsePage } from './pages/case/CaseResponsePage'
 import { CaseAuditPage } from './pages/case/CaseAuditPage'
 import { DisputeInboxPage } from './pages/DisputeInboxPage'
 import { SimulationPage } from './pages/SimulationPage'
+import { PortfolioPage } from './pages/PortfolioPage'
+import { PolicyPlaygroundPage } from './pages/PolicyPlaygroundPage'
 
 function App() {
   return (
@@ -19,6 +21,10 @@ function App() {
         {/* "/simulation", not "/simulate" -- the latter is a proxied API
             prefix (see vite.config.ts), same collision the case route avoids */}
         <Route path="/simulation" element={<SimulationPage />} />
+        {/* "/risk" and "/playground": "/portfolio" and "/policy" are proxied
+            API prefixes, and Vite proxies by prefix match */}
+        <Route path="/risk" element={<PortfolioPage />} />
+        <Route path="/playground" element={<PolicyPlaygroundPage />} />
         {/* singular "/case/:id", not "/cases/:id" -- the latter collides with
             the dev proxy's "/cases" prefix (see vite.config.ts), which would
             forward this SPA route's own page request to the backend API */}

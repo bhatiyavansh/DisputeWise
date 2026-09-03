@@ -46,6 +46,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-3">
         <SidebarLink to="/disputes" label="Disputes" collapsed={collapsed} />
+        <SidebarLink to="/risk" label="Portfolio Risk" collapsed={collapsed} />
+        <SidebarLink to="/playground" label="Policy Playground" collapsed={collapsed} />
         <NavLink
           to="/simulation"
           title={collapsed ? 'Simulate New Dispute' : undefined}

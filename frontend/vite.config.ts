@@ -16,6 +16,8 @@ const proxy = {
   '/cases': { target: BACKEND_URL, changeOrigin: true },
   '/health': { target: BACKEND_URL, changeOrigin: true },
   '/simulate': { target: BACKEND_URL, changeOrigin: true },
+  '/policy': { target: BACKEND_URL, changeOrigin: true },
+  '/portfolio': { target: BACKEND_URL, changeOrigin: true },
 }
 
 // https://vite.dev/config/
