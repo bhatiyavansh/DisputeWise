@@ -140,11 +140,16 @@ export function SelectField<T extends string>({
         <span className="block text-sm text-ink-300">{label}</span>
         {hint && <span className="block text-xs text-ink-600">{hint}</span>}
       </label>
+      {/* Capped width: a <select> sizes itself to its LONGEST option, so an
+          option like "Unauthorized Transaction" was taking 205px of a 302px
+          row and squeezing its own label onto two lines. The cap keeps every
+          row's label/control balance consistent; the native dropdown still
+          shows each option in full when opened. */}
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="shrink-0 rounded border border-ink-700 bg-ink-900 px-2 py-1 text-sm text-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+        className="w-full max-w-[11rem] shrink-0 truncate rounded border border-ink-700 bg-ink-900 px-2 py-1 text-sm text-ink-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -181,24 +186,26 @@ export function ToggleField({
         aria-checked={value}
         aria-label={label}
         onClick={() => onChange(!value)}
-        className={`relative mr-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-500 ${
+        className={`flex h-5 w-9 shrink-0 items-center rounded-full border px-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-500 ${
           value ? 'border-accent-500 bg-accent-600' : 'border-ink-700 bg-ink-800'
         }`}
       >
-        {/* Vertical centering is done with `top` + `marginTop` (not the
-            `-translate-y-1/2` utility) because `animate={{ x }}` makes Motion
-            own the `transform` property outright -- it overwrites rather than
-            composes with a Tailwind transform class on the same element, so
-            the class's translateY silently disappeared and the thumb rendered
-            off-center, spilling out of this row and getting cut off by the
-            parent Section's overflow-hidden (needed for its height
-            animation). Only `x` is ever animated now, so there's nothing for
-            Motion's transform to clobber. */}
+        {/* The thumb is laid out by flex, not absolute positioning, and Motion
+            animates ONLY `x`. Both details matter:
+            - Absolutely positioning it without a `left` anchor left it at its
+              static position, which inside a <button> is centre-aligned -- so
+              translating it further right pushed it clean out of the track
+              (measured: 12px past the right edge when on).
+            - Animating `x` makes Motion own `transform` outright; it overwrites
+              rather than composes with a Tailwind transform utility, so any
+              class-based translate on this element is silently dropped.
+            Flex + padding gives a well-defined origin and vertical centering
+            that Motion cannot clobber. Travel = track inner width (30px)
+            minus thumb (14px) = 16px. */}
         <motion.span
-          animate={{ x: value ? 16 : 2 }}
+          animate={{ x: value ? 16 : 0 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          style={{ top: '50%', marginTop: '-0.4375rem' }}
-          className="absolute h-3.5 w-3.5 rounded-full bg-ink-50"
+          className="block h-3.5 w-3.5 rounded-full bg-ink-50"
         />
       </button>
     </div>
