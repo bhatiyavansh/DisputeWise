@@ -1,15 +1,8 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import type { ClaimVerification, ClaimVerificationStatus, GeneratedClaim } from '../../api/types'
+import type { ClaimVerification, GeneratedClaim } from '../../api/types'
 import { Panel } from '../common/Panel'
-
-const STATUS_CLASSES: Record<ClaimVerificationStatus, string> = {
-  SUPPORTED: 'bg-contest-50 text-contest-700',
-  PARTIALLY_SUPPORTED: 'bg-review-50 text-review-700',
-  UNSUPPORTED: 'bg-avoid-50 text-avoid-700',
-  INVALID_REFERENCE: 'bg-avoid-50 text-avoid-700',
-  INCOMPLETE: 'bg-review-50 text-review-700',
-}
+import { CLAIM_STATUS_CLASSES } from './claimStatus'
 
 /**
  * Each generated claim, joined to its own independent verification result.
@@ -72,7 +65,7 @@ function ClaimRow({ claim, verification }: { claim: GeneratedClaim; verification
         <span className="min-w-0 text-sm text-ink-100">{claim.text}</span>
         <span className="flex shrink-0 items-center gap-2">
           {verification && (
-            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium uppercase ${STATUS_CLASSES[verification.status]}`}>
+            <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium uppercase ${CLAIM_STATUS_CLASSES[verification.status]}`}>
               {verification.status.replace(/_/g, ' ')}
             </span>
           )}

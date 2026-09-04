@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { ErrorState } from '../../components/common/ErrorState'
 import { InlineSpinner, SkeletonCard } from '../../components/common/LoadingStates'
+import { ChallengeResponsePanel } from '../../components/case/ChallengeResponsePanel'
 import { RetrievedKnowledgePanel } from '../../components/case/RetrievedKnowledgePanel'
 import { ResponseDraftWorkspace } from '../../components/case/ResponseDraftWorkspace'
 import { classifyDraftError } from '../../components/case/draftOutcome'
@@ -98,6 +99,12 @@ export function CaseResponsePage() {
       {draftQuery.data.retrieved_sources.length > 0 && (
         <RetrievedKnowledgePanel sources={draftQuery.data.retrieved_sources} />
       )}
+      {/* Secondary to the draft above: an interface over the same /verify
+          endpoint, so the verifier can be exercised against an arbitrary
+          claim. Rendered for every generation outcome (ready, blocked, or
+          unavailable) because the verifier is deterministic and works even
+          when the LLM provider does not. */}
+      <ChallengeResponsePanel caseId={caseId} />
     </div>
   )
 }
